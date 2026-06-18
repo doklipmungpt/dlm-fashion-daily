@@ -96,6 +96,9 @@ const queries = [
   "국내 패션 업계 브랜드 유통",
   "한국 패션 플랫폼 투자 실적",
   "국내 패션 상권 소비 동향 권역 분석",
+  "국내 패션 소재 공급망 섬유 의류",
+  "국내 여성복 애슬레저 패션 시장",
+  "국내 패션 핵심 상권 리포트",
   "무신사 패션 신세계 현대백화점",
 ];
 
@@ -245,6 +248,9 @@ function topicKey(value = "") {
   const namedTopics = [
     "앙드레김",
     "키르시",
+    "형지ic",
+    "형지엘리트",
+    "제로클릭",
     "비바테크놀로지",
     "하이라이트브랜즈",
     "경기패션창작스튜디오",
@@ -275,6 +281,56 @@ function topicKey(value = "") {
     .map((token) => token.trim().toLowerCase())
     .filter((token) => token.length >= 2 && !stopwords.has(token));
   return tokens.slice(0, 4).sort().join("|");
+}
+
+const similarityStopwords = new Set([
+  "패션",
+  "국내",
+  "업계",
+  "브랜드",
+  "글로벌",
+  "전략",
+  "강화",
+  "확대",
+  "가속",
+  "주목",
+  "진출",
+  "유통",
+  "시장",
+  "산업",
+  "사업",
+  "추진",
+  "기반",
+  "시대",
+  "위해",
+  "관련",
+  "뉴스",
+  "기업",
+]);
+
+function titleTokens(value = "") {
+  return new Set(
+    publicTitle(value)
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2 && !similarityStopwords.has(token)),
+  );
+}
+
+function isSimilarTokenSet(tokens, previousTokenSets) {
+  if (!tokens.size) return false;
+  for (const previous of previousTokenSets) {
+    if (!previous.size) continue;
+    const intersection = [...tokens].filter((token) => previous.has(token)).length;
+    const smaller = Math.min(tokens.size, previous.size);
+    const union = new Set([...tokens, ...previous]).size;
+    const coverage = intersection / smaller;
+    const jaccard = intersection / union;
+    if (intersection >= 3 && coverage >= 0.6) return true;
+    if (intersection >= 2 && jaccard >= 0.5) return true;
+  }
+  return false;
 }
 
 function articleDateString(value = "") {
@@ -530,13 +586,13 @@ const directSources = [
     homeUrl: "https://www.apparelnews.co.kr/",
     source: "어패럴뉴스",
     patterns: [/apparelnews\.co\.kr\/news\/news_view/i],
-    limit: 16,
+    limit: 36,
   },
   {
     homeUrl: "https://www.ktnews.com/",
     source: "한국섬유신문",
     patterns: [/ktnews\.com\/news\/articleView\.html/i],
-    limit: 16,
+    limit: 36,
   },
 ];
 
@@ -556,21 +612,26 @@ async function collectPreviousArticles() {
   const previousUrls = new Set();
   const previousKeys = new Set();
   const previousTopicKeys = new Set();
+  const previousTokenSets = [];
   const previousImages = new Set();
+  const addPreviousTitle = (value) => {
+    if (!value) return;
+    previousKeys.add(articleKey(value));
+    previousTopicKeys.add(topicKey(value));
+    const tokens = titleTokens(value);
+    if (tokens.size) previousTokenSets.push(tokens);
+  };
   for (const issue of issues.filter((item) => item.date !== date)) {
-    if (issue.title) previousKeys.add(articleKey(issue.title));
-    if (issue.title) previousTopicKeys.add(topicKey(issue.title));
+    addPreviousTitle(issue.title);
     for (const headline of issue.headlines || []) {
-      previousKeys.add(articleKey(headline));
-      previousTopicKeys.add(topicKey(headline));
+      addPreviousTitle(headline);
     }
     if (issue.image) previousImages.add(imageKey(issue.image));
     if (!issue.url) continue;
     try {
       const html = await fs.readFile(path.join(ROOT, issue.url), "utf8");
       for (const match of html.matchAll(/<h2>([\s\S]*?)<\/h2>/gi)) {
-        previousKeys.add(articleKey(match[1]));
-        previousTopicKeys.add(topicKey(match[1]));
+        addPreviousTitle(match[1]);
       }
       for (const match of html.matchAll(/<a\b[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi)) {
         previousUrls.add(match[1]);
@@ -585,10 +646,10 @@ async function collectPreviousArticles() {
   previousKeys.delete("");
   previousTopicKeys.delete("");
   previousImages.delete("");
-  return { previousUrls, previousKeys, previousTopicKeys, previousImages };
+  return { previousUrls, previousKeys, previousTopicKeys, previousTokenSets, previousImages };
 }
 
-const { previousUrls, previousKeys, previousTopicKeys, previousImages } = await collectPreviousArticles();
+const { previousUrls, previousKeys, previousTopicKeys, previousTokenSets, previousImages } = await collectPreviousArticles();
 const rawItems = [...directItems, ...googleItems];
 const cutoff = briefingDate.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 const upperCutoff = briefingDate.getTime() + 24 * 60 * 60 * 1000;
@@ -626,9 +687,11 @@ const candidates = rawItems
   .map((item) => ({ ...item, title: publicTitle(item.title) }))
   .filter((item) => {
     const topic = topicKey(item.title);
+    const tokens = titleTokens(item.title);
     return !previousUrls.has(item.url)
       && !previousKeys.has(articleKey(item.title))
-      && !(topic && previousTopicKeys.has(topic));
+      && !(topic && previousTopicKeys.has(topic))
+      && !isSimilarTokenSet(tokens, previousTokenSets);
   })
   .filter((item) => {
     const key = articleKey(item.title);
@@ -878,18 +941,23 @@ function normalizeBriefingArticles(articles) {
   const selectedUrls = new Set();
   const selectedKeys = new Set();
   const selectedTopicKeys = new Set();
+  const selectedTokenSets = [];
 
   function addArticle(article) {
     const key = articleKey(article.title);
     const topic = topicKey(article.title);
+    const tokens = titleTokens(article.title);
     if (!article.title || !article.url || !key) return;
     if (previousKeys.has(key) || (topic && previousTopicKeys.has(topic))) return;
+    if (isSimilarTokenSet(tokens, previousTokenSets)) return;
     if (selectedUrls.has(article.url) || selectedKeys.has(key)) return;
     if (topic && selectedTopicKeys.has(topic)) return;
+    if (isSimilarTokenSet(tokens, selectedTokenSets)) return;
     selected.push(article);
     selectedUrls.add(article.url);
     selectedKeys.add(key);
     if (topic) selectedTopicKeys.add(topic);
+    if (tokens.size) selectedTokenSets.push(tokens);
   }
 
   normalized.forEach(addArticle);
