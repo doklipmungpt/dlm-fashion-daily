@@ -6,6 +6,7 @@ const TIME_ZONE = "Asia/Seoul";
 const MODEL = process.env.GITHUB_MODEL || "openai/gpt-4.1-mini";
 const TOKEN = process.env.GITHUB_TOKEN;
 const API_VERSION = "2026-03-10";
+const FORCE_REGENERATE = /^(1|true|yes)$/i.test(process.env.FORCE_REGENERATE || "");
 
 if (!TOKEN) {
   throw new Error("GITHUB_TOKEN is required.");
@@ -607,6 +608,11 @@ const issuesSource = await fs.readFile(issuesPath, "utf8");
 const arrayMatch = issuesSource.match(/window\.FASHION_DAILY_ISSUES\s*=\s*(\[[\s\S]*\]);?\s*$/);
 if (!arrayMatch) throw new Error("Could not parse data/issues.js");
 const issues = Function(`"use strict"; return (${arrayMatch[1]});`)();
+const existingIssue = issues.find((item) => item.date === date);
+if (existingIssue && !FORCE_REGENERATE) {
+  console.log(`Briefing for ${date} already exists. Skipping regeneration to preserve archive/search consistency.`);
+  process.exit(0);
+}
 
 async function collectPreviousArticles() {
   const previousUrls = new Set();
@@ -1085,13 +1091,21 @@ for (const article of briefing.articles.slice(0, ARTICLE_LIMIT)) {
   });
 }
 
-const enrichedArticles = enrichedDraft.sort((a, b) => {
-  const imageDelta = Number(isUsableArticleImage(b.image)) - Number(isUsableArticleImage(a.image));
-  if (imageDelta) return imageDelta;
+function relevanceSort(a, b) {
   const candidateA = candidates.find((item) => sameArticle(item, a)) || a;
   const candidateB = candidates.find((item) => sameArticle(item, b)) || b;
   return priorityScore(candidateB) - priorityScore(candidateA);
-});
+}
+
+const withImages = enrichedDraft
+  .filter((article) => isUsableArticleImage(article.image))
+  .sort(relevanceSort);
+const withoutImages = enrichedDraft
+  .filter((article) => !isUsableArticleImage(article.image))
+  .sort(relevanceSort);
+const imageLead = withImages.slice(0, 3);
+const relevanceRest = [...withImages.slice(3), ...withoutImages].sort(relevanceSort);
+const enrichedArticles = [...imageLead, ...relevanceRest].slice(0, ARTICLE_LIMIT);
 
 const issueCoverImage = enrichedArticles.find((article) => isUsableArticleImage(article.image))?.image || "";
 const issueHeadlines = enrichedArticles
