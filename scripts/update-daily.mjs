@@ -439,10 +439,16 @@ function isUsableArticleImage(url = "") {
     const parsed = new URL(url);
     if (/googleusercontent\.com$/i.test(parsed.hostname)) return false;
     if (/news\.google\.com$/i.test(parsed.hostname)) return false;
-    // Small list thumbnails look visibly soft in the hero and cards. Prefer the
-    // article's own Open Graph image, and show no image when that is unavailable.
-    if (/(?:^|[\/_-])thumb(?:nail)?(?:[\/_-]|$)|[_-]v(?:120|150|200)(?:\D|$)|[?&](?:w|width|size)=?(?:120|150|160|180|200)(?:\D|$)/i.test(`${parsed.pathname}${parsed.search}`)) return false;
     return true;
+  } catch {
+    return false;
+  }
+}
+
+function isLowResolutionImage(url = "") {
+  try {
+    const parsed = new URL(url);
+    return /(?:^|[\/_-])thumb(?:nail)?(?:[\/_-]|$)|[_-]v(?:120|150|200)(?:\D|$)|[?&](?:w|width|size)=?(?:120|150|160|180|200)(?:\D|$)/i.test(`${parsed.pathname}${parsed.search}`);
   } catch {
     return false;
   }
@@ -507,20 +513,7 @@ async function fetchPageImage(url) {
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("text/html")) return "";
     const html = await response.text();
-    const patterns = [
-      /<meta\b[^>]*(?:property|name)=["']og:image(?::secure_url)?["'][^>]*content=["']([^"']+)["'][^>]*>/i,
-      /<meta\b[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["']og:image(?::secure_url)?["'][^>]*>/i,
-      /<meta\b[^>]*(?:property|name)=["']twitter:image(?::src)?["'][^>]*content=["']([^"']+)["'][^>]*>/i,
-      /<meta\b[^>]*content=["']([^"']+)["'][^>]*(?:property|name)=["']twitter:image(?::src)?["'][^>]*>/i,
-      /<meta\b[^>]*itemprop=["']image["'][^>]*content=["']([^"']+)["'][^>]*>/i,
-      /<link\b[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*>/i,
-    ];
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      const image = match ? absolutizeUrl(decodeXml(match[1]), response.url) : "";
-      if (isUsableArticleImage(image)) return image;
-    }
-    return "";
+    return pageImage(html, response.url);
   } catch {
     return "";
   }
@@ -600,16 +593,40 @@ function pagePublishedAt(html) {
   ]);
 }
 
+function pageImageCandidates(html, baseUrl) {
+  const candidates = [];
+  const add = (value) => {
+    const absolute = absolutizeUrl(decodeXml(value || ""), baseUrl);
+    if (isUsableArticleImage(absolute) && !candidates.includes(absolute)) candidates.push(absolute);
+  };
+
+  ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src", "image"].forEach((name) => {
+    add(metaContent(html, [name]));
+  });
+
+  // Many publishers expose the large original only through srcset. Read the
+  // widest candidate first, then retain the smaller versions as fallbacks.
+  for (const match of html.matchAll(/<(?:img|source)\b[^>]*\bsrcset=["']([^"']+)["'][^>]*>/gi)) {
+    const sources = match[1]
+      .split(",")
+      .map((part) => {
+        const parts = part.trim().split(/\s+/);
+        const width = Number.parseInt(parts[1], 10) || 0;
+        return { url: parts[0], width };
+      })
+      .sort((a, b) => b.width - a.width);
+    sources.forEach((source) => add(source.url));
+  }
+
+  for (const match of html.matchAll(/<img\b[^>]*(?:data-original|data-src|src)=["']([^"']+)["'][^>]*>/gi)) {
+    add(match[1]);
+  }
+  return candidates;
+}
+
 function pageImage(html, baseUrl) {
-  const image = metaContent(html, [
-    "og:image:secure_url",
-    "og:image",
-    "twitter:image",
-    "twitter:image:src",
-    "image",
-  ]);
-  const absolute = image ? absolutizeUrl(image, baseUrl) : "";
-  return isUsableArticleImage(absolute) ? absolute : "";
+  const candidates = pageImageCandidates(html, baseUrl);
+  return candidates.find((image) => !isLowResolutionImage(image)) || candidates[0] || "";
 }
 
 async function fetchArticleDetails(link, source) {
@@ -728,7 +745,9 @@ const seen = new Set();
 function priorityScore(item) {
   const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
   let score = item.sourceType === "direct" ? 20 : 0;
-  if (item.imageUrl) score += 80;
+  // Images only break close ties. Article relevance remains the main selector.
+  if (item.imageUrl && !isLowResolutionImage(item.imageUrl)) score += 12;
+  else if (item.imageUrl) score += 4;
   const itemDate = articleDateString(item.publishedAt);
   if (itemDate === preferredArticleDate) score += 90;
   else if (itemDate === date) score += 35;
@@ -1062,12 +1081,20 @@ async function chooseArticleImage(article, usedImages) {
     return image;
   };
   const candidate = candidates.find((item) => sameArticle(item, article));
-  const candidateImage = accept(candidate?.imageUrl);
-  if (candidateImage) return candidateImage;
+  const candidateImage = candidate?.imageUrl || "";
+  if (candidateImage && !isLowResolutionImage(candidateImage)) {
+    const acceptedCandidate = accept(candidateImage);
+    if (acceptedCandidate) return acceptedCandidate;
+  }
 
   const pageImage = await fetchPageImage(article.url);
   const fetchedImage = accept(pageImage);
   if (fetchedImage) return fetchedImage;
+
+  // Keep a small source thumbnail as the final fallback; do not discard a
+  // relevant article merely because its available image is low resolution.
+  const fallbackImage = accept(candidateImage);
+  if (fallbackImage) return fallbackImage;
 
   return "";
 }
