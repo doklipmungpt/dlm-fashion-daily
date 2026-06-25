@@ -437,8 +437,11 @@ function isUsableArticleImage(url = "") {
   if (!isExternalImage(url)) return false;
   try {
     const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
     if (/googleusercontent\.com$/i.test(parsed.hostname)) return false;
     if (/news\.google\.com$/i.test(parsed.hostname)) return false;
+    if (/\.(?:html?|php|aspx?|jsp)$/i.test(path)) return false;
+    if (/(?:article|news)[_-]?view|\/view(?:\.|\/|$)|\/article(?:\.|\/|$)/i.test(path)) return false;
     return true;
   } catch {
     return false;

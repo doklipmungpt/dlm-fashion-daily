@@ -15,7 +15,7 @@ window.FASHION_DAILY_ISSUES = [
       "7월 섬유패션업계, 수출 전망은 제조업 중 최고…내수·수익성은 부진",
       "워크업, 생활형 워크웨어로 확장…작업복 사러 왔다가 냉감티·반바지까지 산다"
     ],
-    "image": "https://www.ktnews.com/news/articleView.html?idxno=146769",
+    "image": "https://www.ktnews.com/news/photo/202606/146769_126847_1113.jpg",
     "url": "issues/2026-06-25.html",
     "tags": [
       "기능성패션",
