@@ -925,7 +925,11 @@ JSON 객체만 출력하라. 마크다운 코드 블록은 쓰지 마라.
 {
   "leadHeadline": "전체 흐름을 설명하는 짧고 강한 헤드라인",
   "leadSummary": "오늘 업계 흐름 2문장",
-  "watchPoint": "오늘의 관전 포인트 2문장",
+  "watchPoints": [
+    "오늘 선택한 기사 중 산업적으로 주목할 포인트 1",
+    "우리 회사와 유사 고객·상품·유통 관점에서 볼 포인트 2",
+    "앞으로 확인해야 할 시장 변화 또는 실행 힌트 3"
+  ],
   "tags": ["태그1", "태그2", "태그3", "태그4"],
   "articles": [
     {
@@ -940,6 +944,10 @@ JSON 객체만 출력하라. 마크다운 코드 블록은 쓰지 마라.
     }
   ]
 }
+watchPoints는 반드시 3개를 작성하라.
+watchPoints는 단순 안내 문구가 아니라, 선택한 기사 6개를 종합해 산업적으로 관심 있거나 사업상 메리트 있게 봐야 할 지점을 써라.
+watchPoints에는 독립문/PAT 관점에서 상품 기획, 소재·공급망, 중장년 고객, 유통 채널, 경쟁 브랜드 움직임 중 확인할 부분을 자연스럽게 반영하라.
+각 watchPoints 항목은 45자 이상 120자 이하의 한국어 문장으로 작성하라.
 `.trim();
 
 function normalizeArticleDate(value) {
@@ -988,6 +996,51 @@ function fallbackImpact(item) {
   return "브랜드 운영과 상품·유통 전략을 점검할 때 참고할 만한 업계 흐름입니다.";
 }
 
+function fallbackWatchPoints(articles = []) {
+  const text = articles
+    .map((article) => `${article.title || ""} ${article.summary || ""} ${(article.summaryBullets || []).join(" ")} ${article.impact || ""}`)
+    .join(" ")
+    .toLowerCase();
+  const points = [];
+
+  if (/(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐)/i.test(text)) {
+    points.push("기능성 소재와 R&D 강화 흐름은 여름 상품력, 착용감, 차별화 포인트를 다시 점검하게 하는 신호입니다.");
+  }
+  if (/(중장년|어덜트|셔츠|남성복|여성복|캐주얼|국민 셔츠|고객)/i.test(text)) {
+    points.push("중장년 고객이 반복 구매하는 기본 아이템의 힘을 확인하고, 핵심 품목의 핏·소재·가격 설계를 살펴볼 필요가 있습니다.");
+  }
+  if (/(글로벌|수출|해외|소싱|공급망|미국|바이어|전시)/i.test(text)) {
+    points.push("글로벌 소싱과 해외 바이어 접점 확대는 국내 브랜드의 공급망 안정성과 수출 가능성을 함께 볼 만한 대목입니다.");
+  }
+  if (/(럭셔리|성장|시장|소비|매출|판매)/i.test(text)) {
+    points.push("럭셔리 시장의 회복 속도 둔화는 소비 양극화와 가격 저항을 가늠하는 참고 지표로 함께 봐야 합니다.");
+  }
+  if (/(유통|매장|상권|플랫폼|백화점|판매)/i.test(text)) {
+    points.push("판매 채널과 상권 변화는 오프라인 고객 접점의 효율을 점검하고 유통 우선순위를 조정하는 단서가 됩니다.");
+  }
+
+  points.push(
+    "오늘 선정된 기사들은 단발 이슈보다 소재, 고객, 유통 구조가 함께 움직이는지를 확인하는 관점에서 보는 것이 좋습니다.",
+  );
+
+  return [...new Set(points)].slice(0, 3);
+}
+
+function normalizeWatchPoints(briefingData, articles = []) {
+  const rawPoints = Array.isArray(briefingData.watchPoints)
+    ? briefingData.watchPoints
+    : String(briefingData.watchPoint || "")
+        .split(/\n+|(?:^|\s)(?:[1-3][.)]|[-•])\s+/)
+        .map((point) => point.trim())
+        .filter(Boolean);
+  const cleaned = rawPoints
+    .map((point) => cleanSummaryText(point))
+    .filter((point) => point.length >= 20)
+    .slice(0, 3);
+  const fallbacks = fallbackWatchPoints(articles);
+  return [...cleaned, ...fallbacks].slice(0, 3);
+}
+
 function fallbackBriefing() {
   const picked = candidates
     .filter((item) => item.sourceType === "direct")
@@ -999,8 +1052,7 @@ function fallbackBriefing() {
     leadHeadline: "국내 패션 업계 주요 뉴스 업데이트",
     leadSummary:
       "패션 전문 매체와 주요 뉴스 후보를 바탕으로 오늘 확인할 만한 업계 소식을 모았습니다.",
-    watchPoint:
-      "오늘 브리핑은 국내 패션 전문 매체에서 확인한 주요 기사 흐름을 중심으로 구성했습니다. 세부 내용은 원문 기사에서 함께 확인해 주세요.",
+    watchPoints: fallbackWatchPoints(picked),
     tags: ["패션업계", "브랜드", "유통", "트렌드"],
     articles: picked.map((item) => ({
       title: publicTitle(item.title),
@@ -1297,8 +1349,8 @@ const weeklySignals = await fetchWeeklySignals();
 
 briefing.leadHeadline = publicTitle(briefing.leadHeadline || "국내 패션 업계 주요 뉴스 업데이트");
 briefing.leadSummary = cleanSummaryText(briefing.leadSummary || "패션 전문 매체와 주요 뉴스 후보를 바탕으로 오늘 확인할 만한 업계 소식을 모았습니다.");
-briefing.watchPoint = cleanSummaryText(briefing.watchPoint || "오늘 브리핑은 국내 패션 전문 매체에서 확인한 주요 기사 흐름을 중심으로 구성했습니다.");
 briefing.articles = normalizeBriefingArticles(briefing.articles || []);
+briefing.watchPoints = normalizeWatchPoints(briefing, briefing.articles);
 
 const usedImages = new Set();
 const enrichedDraft = [];
@@ -1359,6 +1411,10 @@ const articleCards = enrichedArticles
   })
   .join("");
 
+const watchPointItems = briefing.watchPoints
+  .map((point) => `<li>${escapeHtml(point)}</li>`)
+  .join("");
+
 const issueHtml = `<!doctype html>
 <html lang="ko">
 <head>
@@ -1381,7 +1437,7 @@ const issueHtml = `<!doctype html>
     .meta{color:var(--blue);font-size:9px;font-weight:800;letter-spacing:.1em}.article-image{width:100%;height:180px;margin:14px 0;border-radius:12px;object-fit:cover}
     h2{margin:0 0 12px;font-size:23px;line-height:1.28;letter-spacing:-.035em}article p{margin:0 0 13px;color:#52565f;font-size:14px;line-height:1.7}.summary-block{margin:0 0 14px}.summary-block strong{display:block;margin-bottom:8px;color:#20232a;font-size:12px}.summary-block ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}.summary-block li{position:relative;padding-left:14px;color:#52565f;font-size:14px;line-height:1.55}.summary-block li:before{content:"";position:absolute;left:0;top:.65em;width:5px;height:5px;border-radius:50%;background:var(--blue)}
     .impact{margin-top:auto;padding:13px;border-radius:11px;background:var(--soft);color:#34373e}.article-link{display:flex;align-items:center;justify-content:center;margin-top:16px;min-height:46px;border-radius:999px;background:var(--blue);color:#fff;font-size:14px;font-weight:900}.source{margin-top:10px;color:var(--muted);font-size:9px}
-    .watch{margin-top:16px;padding:26px;border-radius:18px;background:var(--blue);color:#fff}.watch h3{margin:0 0 8px;font-size:20px}.watch p{margin:0;line-height:1.7}
+    .watch{margin-top:16px;padding:26px;border-radius:18px;background:var(--blue);color:#fff}.watch h3{margin:0 0 14px;font-size:20px}.watch ul{display:grid;gap:10px;margin:0;padding:0;list-style:none}.watch li{position:relative;padding-left:18px;line-height:1.7}.watch li:before{content:"";position:absolute;left:0;top:.75em;width:6px;height:6px;border-radius:50%;background:#fff}
     footer{margin-top:30px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:9px}
     @media(max-width:760px){body{background:#fff}.page{width:100%;margin:0;padding:18px 15px 28px;border-radius:0}.hero.has-image{height:68vh}.hero.has-image .hero-copy{left:22px;right:22px;bottom:24px}.hero-copy{padding:28px}.grid{grid-template-columns:1fr}}
   </style>
@@ -1398,7 +1454,7 @@ const issueHtml = `<!doctype html>
       </div>
     </section>
     <section class="grid">${articleCards}</section>
-    <section class="watch"><h3>오늘의 관전 포인트</h3><p>${escapeHtml(briefing.watchPoint)}</p></section>
+    <section class="watch"><h3>오늘의 관전 포인트</h3><ul>${watchPointItems}</ul></section>
     <footer>최근 공개된 뉴스 제목과 출처를 바탕으로 선별·요약했습니다. 중요한 의사결정 전에는 원문을 확인하세요.</footer>
   </main>
 </body>
