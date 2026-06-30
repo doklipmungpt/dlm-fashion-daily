@@ -1,23 +1,15 @@
 window.DLM_FASHION_SIGNALS = {
-  "updatedAt": "2026-06-29T23:44:16.003Z",
-  "weather": "서울 22~30℃ 흐름, 주간 최대 강수확률 96%",
-  "exchange": "USD/KRW 1,544원, 1주 전 대비 7.6원 상승",
+  "updatedAt": "2026-06-30T23:52:29.966Z",
+  "weather": "서울 22~30℃ 흐름, 주간 최대 강수확률 90%",
+  "exchange": "USD/KRW 1,551원, 1주 전 대비 4.5원 상승",
   "forecast": [
-    {
-      "date": "2026-06-30",
-      "day": "화",
-      "icon": "🌦️",
-      "max": 29,
-      "min": 20,
-      "rain": 94
-    },
     {
       "date": "2026-07-01",
       "day": "수",
       "icon": "🌦️",
-      "max": 31,
+      "max": 30,
       "min": 21,
-      "rain": 65
+      "rain": 31
     },
     {
       "date": "2026-07-02",
@@ -25,39 +17,47 @@ window.DLM_FASHION_SIGNALS = {
       "icon": "🌦️",
       "max": 27,
       "min": 21,
-      "rain": 41
+      "rain": 61
     },
     {
       "date": "2026-07-03",
       "day": "금",
       "icon": "🌦️",
-      "max": 31,
+      "max": 28,
       "min": 22,
-      "rain": 27
+      "rain": 37
     },
     {
       "date": "2026-07-04",
       "day": "토",
-      "icon": "☁️",
-      "max": 34,
-      "min": 22,
-      "rain": 20
+      "icon": "🌦️",
+      "max": 33,
+      "min": 23,
+      "rain": 16
     },
     {
       "date": "2026-07-05",
       "day": "일",
-      "icon": "🌧️",
-      "max": 34,
+      "icon": "🌦️",
+      "max": 30,
       "min": 23,
-      "rain": 59
+      "rain": 63
     },
     {
       "date": "2026-07-06",
       "day": "월",
       "icon": "🌧️",
-      "max": 26,
-      "min": 22,
-      "rain": 96
+      "max": 31,
+      "min": 23,
+      "rain": 90
+    },
+    {
+      "date": "2026-07-07",
+      "day": "화",
+      "icon": "🌧️",
+      "max": 27,
+      "min": 23,
+      "rain": 89
     }
   ]
 };
