@@ -1059,6 +1059,77 @@ function fallbackImpact(item) {
   return "브랜드 운영과 상품·유통 전략을 점검할 때 참고할 만한 업계 흐름입니다.";
 }
 
+function impactCandidates(item) {
+  const text = `${item.title || ""} ${item.summary || ""} ${item.description || ""}`.toLowerCase();
+  const candidates = [];
+
+  if (/(어덜트|4050|5060|중장년|여성복|남성복|캐주얼)/i.test(text)) {
+    candidates.push(
+      "핵심 고객층의 취향 변화와 상품 기획 방향을 함께 점검할 수 있는 소식입니다.",
+      "성숙 고객을 겨냥한 상품력과 브랜드 운영 방식의 변화를 읽을 수 있는 흐름입니다.",
+      "여성복·캐주얼 시장에서 고객 세분화와 상품 차별화가 더 중요해지는 신호입니다.",
+    );
+  }
+  if (/(상권|지역|권역|소비권|유동인구|가두점|로드숍)/i.test(text)) {
+    candidates.push(
+      "지역 상권과 오프라인 소비 흐름을 점검할 때 참고할 만한 유통 신호입니다.",
+      "매장 입지와 고객 유입 구조를 다시 살펴보게 하는 오프라인 유통 흐름입니다.",
+      "권역별 소비 변화가 브랜드의 채널 전략에 어떤 영향을 주는지 볼 만한 사례입니다.",
+    );
+  }
+  if (/(백화점|아울렛|매장|팝업|유통|플랫폼|판매)/i.test(text)) {
+    candidates.push(
+      "판매 채널 전략을 다시 살펴볼 만한 유통 관련 흐름입니다.",
+      "온라인과 오프라인 접점을 어떻게 조합할지 판단할 때 참고할 만한 소식입니다.",
+      "고객 접점 확대와 매출 효율을 함께 점검하게 하는 유통 변화입니다.",
+    );
+  }
+  if (/(투자|실적|매출|영업이익|인수|상장)/i.test(text)) {
+    candidates.push(
+      "브랜드의 성장성, 수익성, 투자 우선순위를 판단할 때 참고할 만한 재무·사업 신호입니다.",
+      "실적과 성장 전략을 함께 보며 브랜드 체질 개선 여부를 확인할 수 있는 이슈입니다.",
+      "수익성과 확장성의 균형을 어떻게 만들고 있는지 살펴볼 만한 사업 흐름입니다.",
+    );
+  }
+  if (/(ai|인공지능|테크|기술|ip|데이터)/i.test(text)) {
+    candidates.push(
+      "패션 비즈니스에서 기술 활용과 콘텐츠 자산화가 어떻게 경쟁력으로 이어지는지 보여주는 사례입니다.",
+      "AI와 디지털 도구가 상품 기획, 마케팅, 고객 경험으로 확장되는 흐름입니다.",
+      "기술 활용이 브랜드 표현 방식과 운영 효율을 바꾸는 과정을 확인할 수 있습니다.",
+    );
+  }
+  if (/(관세|규제|정부|정책|공급망|소싱|수출|해외)/i.test(text)) {
+    candidates.push(
+      "원가, 생산, 수입 구조에 영향을 줄 수 있어 공급망 리스크 관점에서 확인이 필요한 이슈입니다.",
+      "해외 시장과 공급망 변수가 브랜드 운영에 미치는 영향을 살펴볼 만한 소식입니다.",
+      "소싱과 수출 환경 변화가 상품 가격과 납기 전략에 미칠 영향을 점검해야 합니다.",
+    );
+  }
+
+  candidates.push(
+    "브랜드 운영과 상품·유통 전략을 점검할 때 참고할 만한 업계 흐름입니다.",
+    "상품 기획, 고객 접점, 채널 운영을 함께 살펴보게 하는 참고 신호입니다.",
+    "단발 이슈보다 브랜드 방향성과 시장 대응력을 함께 확인할 만한 내용입니다.",
+  );
+
+  return [...new Set(candidates.map(cleanSummaryText).filter(Boolean))];
+}
+
+function uniqueImpactForArticle(article, usedImpacts) {
+  const current = qualityBullet(article.impact, "");
+  const options = [current, ...impactCandidates(article)].filter(Boolean);
+  for (const option of options) {
+    const key = option.replace(/\s+/g, " ").trim();
+    if (!usedImpacts.has(key)) {
+      usedImpacts.add(key);
+      return key;
+    }
+  }
+  const fallback = `「${publicTitle(article.title).slice(0, 24)}」 이슈는 상품과 채널 전략을 함께 점검하게 합니다.`;
+  usedImpacts.add(fallback);
+  return fallback;
+}
+
 function fallbackWatchPoints(articles = []) {
   const text = articles
     .map((article) => `${article.title || ""} ${article.summary || ""} ${(article.summaryBullets || []).join(" ")} ${article.impact || ""}`)
@@ -1503,7 +1574,11 @@ const withoutImages = enrichedDraft
   .sort(relevanceSort);
 const imageLead = withImages.slice(0, 3);
 const relevanceRest = [...withImages.slice(3), ...withoutImages].sort(relevanceSort);
-const enrichedArticles = [...imageLead, ...relevanceRest].slice(0, ARTICLE_LIMIT);
+const usedImpacts = new Set();
+const enrichedArticles = [...imageLead, ...relevanceRest].slice(0, ARTICLE_LIMIT).map((article) => ({
+  ...article,
+  impact: uniqueImpactForArticle(article, usedImpacts),
+}));
 
 const issueCoverImage = enrichedArticles.find((article) => isUsableArticleImage(article.image))?.image || "";
 const issueHeadlines = enrichedArticles
