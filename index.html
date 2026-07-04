@@ -10,6 +10,13 @@
     })(window,document,'script','dataLayer','GTM-MFTVX3QQ');
   </script>
   <!-- End Google Tag Manager -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-T7EECMQGTV"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag("js", new Date());
+    gtag("config", "G-T7EECMQGTV", { send_page_view: false });
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="국내 패션 업계의 주요 뉴스를 날짜별로 모아보는 DLM Fashion Daily 아카이브">
@@ -424,6 +431,31 @@
     const weatherForecast = document.querySelector("#weather-forecast");
     const PAGE_SIZE = 9;
     let currentPage = 1;
+    let searchTrackTimer;
+
+    window.dataLayer = window.dataLayer || [];
+    function trackFashionDailyEvent(event, params = {}) {
+      const eventParams = {
+        dashboard_id: "fashion_daily",
+        dashboard_name: "fashion_daily",
+        page_title: document.title,
+        ...params,
+      };
+      window.dataLayer.push({ event, ...eventParams });
+      if (typeof gtag === "function") {
+        gtag("event", event, eventParams);
+      }
+    }
+
+    function escapeAttr(value = "") {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;",
+      })[char]);
+    }
 
     function toKstDate(date = new Date()) {
       return new Intl.DateTimeFormat("en-CA", {
@@ -503,7 +535,7 @@
       archive.innerHTML = visibleIssues.map((issue) => {
         const image = issueImage(issue, usedImages);
         return `
-          <a class="card ${image ? "" : "no-image"}" href="${issue.url}">
+          <a class="card ${image ? "" : "no-image"}" href="${issue.url}" data-issue-title="${escapeAttr(issue.title)}" data-issue-date="${escapeAttr(issue.date)}" data-issue-tags="${escapeAttr((issue.tags || []).join(","))}">
             ${image ? `<div class="thumb"><img src="${image}" alt=""></div>` : ""}
             <div class="content">
               <div class="date">${issue.displayDate} · ${issue.day}</div>
@@ -605,12 +637,48 @@
       `;
     }
 
-    search.addEventListener("input", () => { currentPage = 1; render(); });
-    month.addEventListener("change", () => { currentPage = 1; render(); });
+    search.addEventListener("input", () => {
+      currentPage = 1;
+      render();
+      clearTimeout(searchTrackTimer);
+      searchTrackTimer = setTimeout(() => {
+        trackFashionDailyEvent("fashion_search", {
+          activity_type: "search",
+          activity_label: search.value.trim(),
+          search_term: search.value.trim(),
+        });
+      }, 700);
+    });
+    month.addEventListener("change", () => {
+      currentPage = 1;
+      trackFashionDailyEvent("fashion_month_filter", {
+        activity_type: "filter",
+        activity_label: month.value || "전체",
+        month: month.value,
+      });
+      render();
+    });
+    archive.addEventListener("click", (event) => {
+      const card = event.target.closest(".card");
+      if (!card) return;
+      trackFashionDailyEvent("fashion_article_click", {
+        activity_type: "article_click",
+        activity_label: card.dataset.issueTitle || "",
+        issue_title: card.dataset.issueTitle || "",
+        issue_date: card.dataset.issueDate || "",
+        issue_tags: card.dataset.issueTags || "",
+        issue_url: card.href,
+      });
+    });
     pagination.addEventListener("click", (event) => {
       const button = event.target.closest("[data-page]");
       if (!button || button.disabled) return;
       currentPage = Number(button.dataset.page);
+      trackFashionDailyEvent("fashion_page_change", {
+        activity_type: "pagination",
+        activity_label: String(currentPage),
+        page_number: currentPage,
+      });
       render();
       archive.scrollIntoView({ behavior: "smooth", block: "start" });
     });
