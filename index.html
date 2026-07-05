@@ -437,7 +437,7 @@
     function trackFashionDailyEvent(event, params = {}) {
       const eventParams = {
         dashboard_id: "fashion_daily",
-        dashboard_name: "fashion_daily",
+        dashboard_name: "DLM Fashion Daily",
         page_title: document.title,
         ...params,
       };
@@ -643,7 +643,7 @@
       clearTimeout(searchTrackTimer);
       searchTrackTimer = setTimeout(() => {
         trackFashionDailyEvent("fashion_search", {
-          activity_type: "search",
+          activity_type: "검색",
           activity_label: search.value.trim(),
           search_term: search.value.trim(),
         });
@@ -652,7 +652,7 @@
     month.addEventListener("change", () => {
       currentPage = 1;
       trackFashionDailyEvent("fashion_month_filter", {
-        activity_type: "filter",
+        activity_type: "월 필터",
         activity_label: month.value || "전체",
         month: month.value,
       });
@@ -662,7 +662,7 @@
       const card = event.target.closest(".card");
       if (!card) return;
       trackFashionDailyEvent("fashion_article_click", {
-        activity_type: "article_click",
+        activity_type: "기사 클릭",
         activity_label: card.dataset.issueTitle || "",
         issue_title: card.dataset.issueTitle || "",
         issue_date: card.dataset.issueDate || "",
@@ -675,8 +675,8 @@
       if (!button || button.disabled) return;
       currentPage = Number(button.dataset.page);
       trackFashionDailyEvent("fashion_page_change", {
-        activity_type: "pagination",
-        activity_label: String(currentPage),
+        activity_type: "페이지 이동",
+        activity_label: `${currentPage}페이지`,
         page_number: currentPage,
       });
       render();
