@@ -364,15 +364,40 @@ function qualityBullet(value = "", fallback = "") {
 }
 
 function fallbackSummaryBullets(item) {
-  const title = publicTitle(item.title);
   const parts = sentenceParts(item.description || item.summary || item.title)
     .map((part) => conciseBullet(part, ""))
-    .filter(Boolean);
+    .filter((part) => part && !/관련 흐름이 오늘 주요 기사|브랜드 운영과 상품 기획|유통 채널과 소비 흐름/.test(part));
+  const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""}`.toLowerCase();
+  const contextBullets = [];
+  if (/세정|한성|형지|인동|pat|올포유|웰메이드|올리비아로렌|크로커다일레이디|인디안|데일리스트/i.test(text)) {
+    contextBullets.push(
+      "어덜트 캐주얼 고객층을 겨냥한 상품 구성과 가격 전략을 함께 확인할 수 있습니다.",
+      "기존 브랜드의 시즌 대응 방식과 고객 접점 운영을 비교해 볼 만한 소식입니다.",
+    );
+  }
+  if (/무신사|플랫폼|온라인|커머스|검색량|판매|기획전|특가전|세일|프로모션/i.test(text)) {
+    contextBullets.push(
+      "온라인 채널에서 나타나는 수요 변화와 시즌 상품 반응을 살펴볼 수 있습니다.",
+      "판매 채널별 노출 방식과 프로모션 운영의 영향을 점검할 수 있습니다.",
+    );
+  }
+  if (/상권|오프라인|매장|백화점|팝업|편집숍|신사|성수|명동/i.test(text)) {
+    contextBullets.push(
+      "오프라인 접점과 지역 상권 흐름이 브랜드 경험에 미치는 영향을 볼 수 있습니다.",
+      "매장 구성과 고객 유입 방식의 변화가 유통 전략에 주는 시사점이 있습니다.",
+    );
+  }
+  if (/소재|기능성|냉감|니트|스윔웨어|아웃도어|스포츠|여름/i.test(text)) {
+    contextBullets.push(
+      "시즌 수요에 맞춘 소재와 기능성 상품의 반응을 확인할 수 있습니다.",
+      "여름 상품군의 기획 방향과 소비자 선택 기준을 함께 살펴볼 수 있습니다.",
+    );
+  }
   const bullets = [
     ...parts,
-    `${title} 관련 흐름이 오늘 주요 기사로 확인됐습니다.`,
-    "브랜드 운영과 상품 기획 관점에서 함께 볼 만한 이슈입니다.",
-    "유통 채널과 소비 흐름 변화에 미칠 영향을 점검할 필요가 있습니다.",
+    ...contextBullets,
+    "상품 기획과 채널 운영 관점에서 참고할 만한 업계 신호입니다.",
+    "고객 수요와 시즌 대응 방향을 함께 점검할 수 있는 소식입니다.",
   ];
   return [...new Set(bullets)]
     .map((bullet) => qualityBullet(bullet, "브랜드 운영과 유통 전략 관점에서 참고할 만한 소식입니다."))
@@ -393,6 +418,50 @@ function articleKey(value = "") {
   return publicTitle(value)
     .replace(/[^\p{L}\p{N}]+/gu, "")
     .toLowerCase();
+}
+
+function clusterTitleKey(value = "") {
+  const title = publicTitle(value).toLowerCase();
+  const compact = title.replace(/[^\p{L}\p{N}]+/gu, "");
+  if (!compact) return "";
+
+  const brandHints = [
+    "웰메이드",
+    "인디안",
+    "데일리스트",
+    "세정",
+    "올포유",
+    "올리비아로렌",
+    "크로커다일레이디",
+    "무신사",
+    "노스페이스",
+    "캐리마켓",
+  ].filter((word) => compact.includes(word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")));
+  const eventHints = [
+    "특가전",
+    "기획전",
+    "프로모션",
+    "세일",
+    "할인",
+    "잡화위크",
+    "검색량",
+    "출시",
+    "강화",
+    "개선",
+    "상권",
+  ].filter((word) => compact.includes(word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")));
+
+  if (brandHints.length && eventHints.length) {
+    return `cluster:${[...brandHints.sort(), ...eventHints.slice(0, 2).sort()].join("|")}`;
+  }
+
+  const tokens = title
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length >= 2)
+    .filter((token) => !/^(관련|실시|진행|시작|등|및|오늘|뉴스|기사|여름|17일간|new|k)$/.test(token));
+
+  return tokens.slice(0, 5).sort().join("|");
 }
 
 function topicKey(value = "") {
@@ -481,6 +550,7 @@ function isSimilarTokenSet(tokens, previousTokenSets) {
     const coverage = intersection / smaller;
     const jaccard = intersection / union;
     if (intersection >= 3 && coverage >= 0.6) return true;
+    if (intersection >= 4 && jaccard >= 0.34) return true;
     if (intersection >= 2 && jaccard >= 0.5) return true;
   }
   return false;
@@ -535,10 +605,13 @@ function isUsableArticleImage(url = "") {
   try {
     const parsed = new URL(url);
     const path = parsed.pathname.toLowerCase();
+    const target = `${parsed.hostname}${parsed.pathname}${parsed.search}`.toLowerCase();
     if (/googleusercontent\.com$/i.test(parsed.hostname)) return false;
     if (/news\.google\.com$/i.test(parsed.hostname)) return false;
     if (/\.(?:html?|php|aspx?|jsp)$/i.test(path)) return false;
     if (/(?:article|news)[_-]?view|\/view(?:\.|\/|$)|\/article(?:\.|\/|$)/i.test(path)) return false;
+    if (/\/(?:member|profile|reporter|writer|journalist|author)(?:\/|_|-|$)/i.test(target)) return false;
+    if (/\/news\/photo\/member\//i.test(target)) return false;
     if (/\/image\/logo\/|\/image\/newsroom\/|\/bannerpop\/|\/ndsoft\.gif|default-user|logo|banner/i.test(path)) return false;
     if (/\.(?:gif|svg)$/i.test(path)) return false;
     return true;
@@ -563,6 +636,7 @@ function imageQualityScore(url = "") {
     let score = 0;
     if (/\/news\/photo\//i.test(target)) score += 100;
     if (/\.(?:jpe?g|png|webp)(?:$|\?)/i.test(target)) score += 20;
+    if (/\/(?:member|profile|reporter|writer|journalist|author)(?:\/|_|-|$)/i.test(target)) score -= 500;
     if (isLowResolutionImage(url)) score -= 25;
     return score;
   } catch {
@@ -829,12 +903,14 @@ async function collectPreviousArticles() {
   const previousUrls = new Set();
   const previousKeys = new Set();
   const previousTopicKeys = new Set();
+  const previousClusterKeys = new Set();
   const previousTokenSets = [];
   const previousImages = new Set();
   const addPreviousTitle = (value) => {
     if (!value) return;
     previousKeys.add(articleKey(value));
     previousTopicKeys.add(topicKey(value));
+    previousClusterKeys.add(clusterTitleKey(value));
     const tokens = titleTokens(value);
     if (tokens.size) previousTokenSets.push(tokens);
   };
@@ -862,11 +938,12 @@ async function collectPreviousArticles() {
   }
   previousKeys.delete("");
   previousTopicKeys.delete("");
+  previousClusterKeys.delete("");
   previousImages.delete("");
-  return { previousUrls, previousKeys, previousTopicKeys, previousTokenSets, previousImages };
+  return { previousUrls, previousKeys, previousTopicKeys, previousClusterKeys, previousTokenSets, previousImages };
 }
 
-const { previousUrls, previousKeys, previousTopicKeys, previousTokenSets, previousImages } = await collectPreviousArticles();
+const { previousUrls, previousKeys, previousTopicKeys, previousClusterKeys, previousTokenSets, previousImages } = await collectPreviousArticles();
 const rawItems = [...directItems, ...googleItems];
 const cutoff = briefingDate.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 const upperCutoff = briefingDate.getTime() + 24 * 60 * 60 * 1000;
@@ -919,10 +996,12 @@ const candidates = rawItems
   .map((item) => ({ ...item, title: publicTitle(item.title) }))
   .filter((item) => {
     const topic = topicKey(item.title);
+    const cluster = clusterTitleKey(item.title);
     const tokens = titleTokens(item.title);
     return !previousUrls.has(item.url)
       && !previousKeys.has(articleKey(item.title))
       && !(topic && previousTopicKeys.has(topic))
+      && !(cluster && previousClusterKeys.has(cluster))
       && !isSimilarTokenSet(tokens, previousTokenSets);
   })
   .filter((item) => {
@@ -1125,7 +1204,19 @@ function uniqueImpactForArticle(article, usedImpacts) {
       return key;
     }
   }
-  const fallback = `「${publicTitle(article.title).slice(0, 24)}」 이슈는 상품과 채널 전략을 함께 점검하게 합니다.`;
+  const fallbacks = [
+    "상품 기획과 채널 운영의 균형을 다시 살펴보게 하는 참고 신호입니다.",
+    "고객 수요 변화에 맞춘 시즌 대응 방식을 점검할 수 있는 소식입니다.",
+    "브랜드 경쟁력과 유통 접점의 연결 방식을 함께 볼 만한 내용입니다.",
+    "판매 현장과 상품 전략의 우선순위를 다시 확인하게 하는 흐름입니다.",
+  ];
+  for (const fallback of fallbacks) {
+    if (!usedImpacts.has(fallback)) {
+      usedImpacts.add(fallback);
+      return fallback;
+    }
+  }
+  const fallback = `업계 영향 포인트 ${usedImpacts.size + 1}`;
   usedImpacts.add(fallback);
   return fallback;
 }
@@ -1297,9 +1388,15 @@ briefing = generated;
 function sameArticle(candidate, article) {
   const candidateTitle = publicTitle(candidate.title || "");
   const articleTitle = publicTitle(article.title || "");
+  const candidateCluster = clusterTitleKey(candidateTitle);
+  const articleCluster = clusterTitleKey(articleTitle);
+  const candidateTokens = titleTokens(candidateTitle);
+  const articleTokens = titleTokens(articleTitle);
   return (
     candidate.url === article.url ||
     candidateTitle === articleTitle ||
+    (candidateCluster && articleCluster && candidateCluster === articleCluster) ||
+    isSimilarTokenSet(candidateTokens, [articleTokens]) ||
     (candidateTitle && articleTitle && candidateTitle.includes(articleTitle)) ||
     (candidateTitle && articleTitle && articleTitle.includes(candidateTitle))
   );
@@ -1366,22 +1463,27 @@ function normalizeBriefingArticles(articles) {
   const selectedUrls = new Set();
   const selectedKeys = new Set();
   const selectedTopicKeys = new Set();
+  const selectedClusterKeys = new Set();
   const selectedTokenSets = [];
 
   function addArticle(article) {
     const key = articleKey(article.title);
     const topic = topicKey(article.title);
+    const cluster = clusterTitleKey(article.title);
     const tokens = titleTokens(article.title);
     if (!article.title || !article.url || !key) return;
     if (previousKeys.has(key) || (topic && previousTopicKeys.has(topic))) return;
+    if (cluster && previousClusterKeys.has(cluster)) return;
     if (isSimilarTokenSet(tokens, previousTokenSets)) return;
     if (selectedUrls.has(article.url) || selectedKeys.has(key)) return;
     if (topic && selectedTopicKeys.has(topic)) return;
+    if (cluster && selectedClusterKeys.has(cluster)) return;
     if (isSimilarTokenSet(tokens, selectedTokenSets)) return;
     selected.push(article);
     selectedUrls.add(article.url);
     selectedKeys.add(key);
     if (topic) selectedTopicKeys.add(topic);
+    if (cluster) selectedClusterKeys.add(cluster);
     if (tokens.size) selectedTokenSets.push(tokens);
   }
 
