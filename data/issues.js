@@ -15,7 +15,7 @@ window.FASHION_DAILY_ISSUES = [
       "대형 유통서 존재감 키우는 이머징 남성복",
       "패밀리 편집숍 '캐리마켓 신사', 죽은 상권도 살려낸 IP 전략"
     ],
-    "image": "",
+    "image": "https://www.ktnews.com/news/photo/202607/147001_127277_4518.jpg",
     "url": "issues/2026-07-06.html",
     "tags": [
       "패션업계",

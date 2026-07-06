@@ -612,7 +612,8 @@ function isUsableArticleImage(url = "") {
     if (/(?:article|news)[_-]?view|\/view(?:\.|\/|$)|\/article(?:\.|\/|$)/i.test(path)) return false;
     if (/\/(?:member|profile|reporter|writer|journalist|author)(?:\/|_|-|$)/i.test(target)) return false;
     if (/\/news\/photo\/member\//i.test(target)) return false;
-    if (/\/image\/logo\/|\/image\/newsroom\/|\/bannerpop\/|\/ndsoft\.gif|default-user|logo|banner/i.test(path)) return false;
+    if (/\/image\/logo\/|\/image\/newsroom\/|\/images\/common\/|\/bannerpop\/|\/ndsoft\.gif|default-user|logo|banner|ico_|btn_sns|kakaoch|apntv/i.test(target)) return false;
+    if (/\/upfiles\/pdf_image\//i.test(target)) return false;
     if (/\.(?:gif|svg)$/i.test(path)) return false;
     return true;
   } catch {
@@ -635,8 +636,10 @@ function imageQualityScore(url = "") {
     const target = `${parsed.hostname}${parsed.pathname}${parsed.search}`.toLowerCase();
     let score = 0;
     if (/\/news\/photo\//i.test(target)) score += 100;
+    if (/\/upfiles\/manage\//i.test(target)) score += 100;
     if (/\.(?:jpe?g|png|webp)(?:$|\?)/i.test(target)) score += 20;
     if (/\/(?:member|profile|reporter|writer|journalist|author)(?:\/|_|-|$)/i.test(target)) score -= 500;
+    if (/\/images\/common\/|\/upfiles\/pdf_image\/|ico_|btn_sns|kakaoch|apntv|logo|banner/i.test(target)) score -= 500;
     if (isLowResolutionImage(url)) score -= 25;
     return score;
   } catch {
