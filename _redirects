@@ -1,2 +1,3 @@
-/issues/:date /issues/:date.html 200
-/issues/:date/ /issues/:date.html 200
+# DLM Fashion Daily already links issue pages as /issues/YYYY-MM-DD.html.
+# Do not rewrite /issues/* here, because Cloudflare can otherwise turn
+# /issues/YYYY-MM-DD.html into /issues/YYYY-MM-DD.html.html.
