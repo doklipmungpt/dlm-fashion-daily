@@ -345,28 +345,30 @@ function conciseBullet(value = "", fallback = "") {
 
 function isCompleteKoreanSentence(value = "") {
   const cleaned = cleanSummaryText(value);
-  return /[.!?。！？]$/.test(cleaned) || /(다|요|임|됨|함|했다|한다|됐다|된다|있다|없다|나섰다|밝혔다|전망이다|분석된다)$/.test(cleaned);
+  return /[.!?다]$/.test(cleaned) || /(합니다|했습니다|됩니다|있습니다|없습니다|보입니다|밝혔습니다|전망입니다|사례입니다|흐름입니다)$/.test(cleaned);
 }
 
 function looksTruncated(value = "") {
   const cleaned = cleanSummaryText(value);
   if (!cleaned) return true;
-  if (/[.…]{2,}$|…$/.test(cleaned)) return true;
-  if (/[·,，:：;；\-–—]$/.test(cleaned)) return true;
-  if (/[은는이가을를과와의]$/.test(cleaned)) return true;
-  return cleaned.length > 70 && !isCompleteKoreanSentence(cleaned);
+  if (/[.]{2,}|…|...$/.test(cleaned)) return true;
+  if (/[,.·ㆍ:;-–—]$/.test(cleaned)) return true;
+  if (/d+$/.test(cleaned)) return true;
+  if (/(크로커다|올리비아|데일리|인디|브랜|패션그룹형지의 여성복 브랜드 크로커다)$/.test(cleaned)) return true;
+  if (cleaned.length < 18 || cleaned.length > 120) return true;
+  return !isCompleteKoreanSentence(cleaned);
 }
 
 function qualityBullet(value = "", fallback = "") {
   const cleaned = conciseBullet(value, "");
-  if (cleaned && cleaned.length >= 18 && cleaned.length <= 100 && !looksTruncated(cleaned)) return cleaned;
+  if (cleaned && !isGenericSummaryBullet(cleaned) && !looksTruncated(cleaned)) return cleaned;
   return fallback;
 }
 
 function fallbackSummaryBullets(item) {
   const parts = sentenceParts(item.description || item.summary || item.title)
     .map((part) => conciseBullet(part, ""))
-    .filter((part) => part && !isGenericSummaryBullet(part));
+    .filter((part) => part && !isGenericSummaryBullet(part) && !looksTruncated(part));
   const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""}`.toLowerCase();
   const contextBullets = [];
 
@@ -397,22 +399,17 @@ function fallbackSummaryBullets(item) {
       "여름 상품군에서 소재 차별화가 구매 선택에 미치는 영향을 보여줍니다.",
     );
   }
-  if (/ip|캐릭터|협업|애니메이션|콘텐츠|콜라보/i.test(text)) {
+  if (/ip|캐릭터|협업|애니메이션|콘텐츠|콜라보|미니언즈|몬스터즈/i.test(text)) {
     contextBullets.push(
       "캐릭터와 콘텐츠 IP가 패션 상품의 차별화 요소로 확장되고 있습니다.",
       "협업 상품이 신규 고객 유입과 브랜드 화제성을 만드는 방식이 드러납니다.",
     );
   }
 
-  const bullets = [
-    ...parts,
-    ...contextBullets,
-    "상품 기획과 유통 운영을 함께 점검할 수 있는 참고 소식입니다.",
-    "고객 수요 변화에 맞춘 브랜드 대응 방식을 살펴볼 수 있습니다.",
-  ];
+  const bullets = [...parts, ...contextBullets];
   return [...new Set(bullets)]
-    .map((bullet) => qualityBullet(bullet, "브랜드 운영과 유통 전략을 점검할 수 있는 참고 소식입니다."))
-    .filter((bullet) => bullet.length >= 18 && bullet.length <= 100)
+    .map((bullet) => qualityBullet(bullet, ""))
+    .filter(Boolean)
     .slice(0, 3);
 }
 
@@ -424,37 +421,24 @@ function summaryBulletKey(value = "") {
 
 function isGenericSummaryBullet(value = "") {
   const text = cleanSummaryText(value);
-  return /관련 흐름이 오늘 주요 기사|브랜드 운영과 상품 기획|유통 채널과 소비 흐름|상품 기획과 채널 운영 관점|고객 수요와 시즌 대응|참고할 만한 업계 신호|참고할 만한 소식입니다/.test(text);
+  return /관련 흐름이 오늘 주요 기사|브랜드 운영과 상품 기획|브랜드 운영과 유통 전략|유통 채널과 소비 흐름|상품 기획과 채널 운영 관점|고객 수요와 시즌 대응|참고할 만한 업계 신호|참고할 만한 소식입니다|상품 기획과 유통 운영|고객 수요 변화에 맞춘 브랜드 대응/.test(text);
 }
 
 function normalizeSummaryBullets(article, usedSummaryBullets = new Set()) {
   const rawBullets = Array.isArray(article.summaryBullets) ? article.summaryBullets : [];
   const cleaned = [...rawBullets, ...fallbackSummaryBullets(article)]
     .map((bullet) => qualityBullet(bullet, ""))
-    .filter((bullet) => bullet && !isGenericSummaryBullet(bullet));
-  const fallbackPool = fallbackSummaryBullets(article);
+    .filter((bullet) => bullet && !isGenericSummaryBullet(bullet) && !looksTruncated(bullet));
   const selected = [];
-  for (const bullet of [...cleaned, ...fallbackPool]) {
+  for (const bullet of cleaned) {
     const key = summaryBulletKey(bullet);
     if (!key || usedSummaryBullets.has(key)) continue;
     selected.push(bullet);
     usedSummaryBullets.add(key);
     if (selected.length >= 3) break;
   }
-  const reserves = [
-    "이 소식은 상품 구성과 고객 접점 운영을 함께 살펴보게 합니다.",
-    "시장 반응을 기준으로 브랜드의 다음 시즌 대응을 점검할 수 있습니다.",
-    "유통 채널과 상품 메시지가 어떻게 연결되는지 확인할 수 있습니다.",
-    "소비자 선택 기준이 상품 기획에 반영되는 방식을 보여줍니다.",
-    "브랜드가 계절 수요를 해석하는 방식을 비교해 볼 수 있습니다.",
-    "오프라인 경험과 온라인 노출 전략의 균형을 살펴볼 수 있습니다.",
-  ];
-  for (const reserve of reserves) {
-    if (selected.length >= 3) break;
-    const key = summaryBulletKey(reserve);
-    if (usedSummaryBullets.has(key)) continue;
-    selected.push(reserve);
-    usedSummaryBullets.add(key);
+  if (selected.length < 3) {
+    throw new Error(`Summary quality gate failed for article: ${article.title || "untitled"}`);
   }
   return selected.slice(0, 3);
 }
