@@ -1,0 +1,2 @@
+/issues/:date /issues/:date.html 200
+/issues/:date/ /issues/:date.html 200
