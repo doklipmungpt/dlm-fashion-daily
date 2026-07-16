@@ -358,8 +358,8 @@ function looksTruncated(value = "") {
   if (/\s다$/.test(cleaned)) return true;
   if (/(조성이|내용이|정보가|사례가|활용 사례를|가능성이|시장이)\s*다$/.test(cleaned)) return true;
   if (/^(시 성장|성장 궤도|관련 흐름|해당 흐름|이 이슈|이번 이슈)\s/.test(cleaned)) return true;
-  if (/^(스는|업은|사는)\s/.test(cleaned)) return true;
-  if (/(크로커다|올리비아|데일리|인디|브랜|패션그룹형지의 여성복 브랜드 크로커다)$/.test(cleaned)) return true;
+  if (/^(스는|업은|사는|[가-힣]\s+[A-Z0-9])\s*/.test(cleaned)) return true;
+  if (/(크로커다|올리비아|데일리|인디|브랜|아디다|나이|패션그룹형지의 여성복 브랜드 크로커다)$/.test(cleaned)) return true;
   if (cleaned.length < 18 || cleaned.length > 120) return true;
   return !isCompleteKoreanSentence(cleaned);
 }
@@ -402,7 +402,7 @@ function titleSpecificBullets(item) {
     bullets.push(`${subject}의 해외 관련 흐름은 시장 확장과 현지 유통 전략을 함께 확인하게 합니다.`);
     bullets.push("해외 시장 대응은 가격, 소싱, 브랜딩 전략에 직접적인 영향을 줄 수 있습니다.");
   }
-  if (/소재|원단|기능성|냉감|방수|스포츠|아웃도어/.test(title)) {
+  if (/소재|원단|기능성|냉감|방수|아웃도어/.test(title)) {
     bullets.push(`${subject} 관련 소재·기능성 이슈는 상품 차별화와 착용 경험을 함께 보여줍니다.`);
     bullets.push("계절 수요와 기능성 소재가 결합될 때 상품 기획 우선순위가 달라질 수 있습니다.");
   }
@@ -417,6 +417,11 @@ function titleSpecificBullets(item) {
   if (/협업|콜라보|IP|캐릭터|콘텐츠|전시|디자이너/.test(title)) {
     bullets.push(`${subject} 이슈는 브랜드 스토리와 콘텐츠 자산을 상품 경험으로 확장하는 흐름입니다.`);
     bullets.push("협업과 콘텐츠 활용은 신규 고객 유입과 브랜드 화제성을 만드는 수단이 될 수 있습니다.");
+  }
+  if (/스포츠웨어|아디다스|나이키|월드컵|미디어|MIV|런치메트릭스/.test(title)) {
+    bullets.push(`${subject} 이슈는 스포츠 이벤트가 브랜드 미디어 영향력과 판매 경쟁으로 이어지는 흐름입니다.`);
+    bullets.push("스타 선수와 대형 스포츠 이벤트가 브랜드 선호도와 제품 구매 의향에 미치는 영향을 볼 필요가 있습니다.");
+    bullets.push("미디어 노출 지표와 실제 소비자 평가가 다를 수 있어 캠페인 성과를 입체적으로 봐야 합니다.");
   }
   if (/헤리티지|다음세대|장광효|인터뷰|아카이브|전통|세대/.test(title)) {
     bullets.push(`${subject} 이슈는 브랜드가 축적한 정체성을 다음 고객층에게 전달하는 방식과 연결됩니다.`);

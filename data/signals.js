@@ -1,5 +1,5 @@
 window.DLM_FASHION_SIGNALS = {
-  "updatedAt": "2026-07-16T00:30:34.430Z",
+  "updatedAt": "2026-07-16T00:38:32.803Z",
   "weather": "서울 23~29℃ 흐름, 주간 최대 강수확률 95%",
   "exchange": "USD/KRW 1,492원, 1주 전 대비 20.3원 하락",
   "forecast": [
@@ -15,7 +15,7 @@ window.DLM_FASHION_SIGNALS = {
       "date": "2026-07-17",
       "day": "금",
       "icon": "🌧️",
-      "max": 27,
+      "max": 28,
       "min": 22,
       "rain": 53
     },
