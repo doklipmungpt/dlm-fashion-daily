@@ -1395,29 +1395,23 @@ function fallbackLeadHeadline(articles = []) {
     .join(" ")
     .toLowerCase();
 
-  const themes = [];
-  if (/(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐|공급망|소싱)/i.test(text)) {
-    themes.push("기능성 소재");
-  }
-  if (/(오프라인|팝업|매장|상권|백화점|유통|체험|공간)/i.test(text)) {
-    themes.push("오프라인 접점");
-  }
-  if (/(럭셔리|명품|소비|성장|고객|판매|셔츠)/i.test(text)) {
-    themes.push("소비 변화");
-  }
-  if (/(ai|인공지능|테크|플랫폼|디자인|이커머스)/i.test(text)) {
-    themes.push("AI 전환");
-  }
-  if (/(글로벌|해외|수출|바이어|통관|관세|강제노동)/i.test(text)) {
-    themes.push("글로벌 리스크");
-  }
-  if (/(여성복|남성복|spa|어덜트|중장년|캐주얼)/i.test(text)) {
-    themes.push("상품 전략");
-  }
+  const themeRules = [
+    { label: "스포츠웨어 미디어 경쟁", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
+    { label: "ESG·지역사회 접점", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
+    { label: "유럽 오프라인 진출", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출)/i },
+    { label: "뷰티 유통 다변화", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
+    { label: "헤리티지·장인정신", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
+    { label: "기능성 소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐|공급망|소싱)/i },
+    { label: "오프라인 접점", pattern: /(오프라인|팝업|매장|상권|백화점|유통|체험|공간)/i },
+    { label: "소비 변화", pattern: /(럭셔리|명품|소비|성장|고객|판매|셔츠)/i },
+    { label: "AI 전환", pattern: /(ai|인공지능|테크|플랫폼|디자인|이커머스)/i },
+    { label: "상품 전략", pattern: /(여성복|남성복|spa|어덜트|중장년|캐주얼)/i },
+  ];
 
+  const themes = themeRules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.label);
   const uniqueThemes = [...new Set(themes)].slice(0, 2);
-  if (uniqueThemes.length >= 2) return `${uniqueThemes[0]}·${uniqueThemes[1]} 흐름이 맞물린 하루`;
-  if (uniqueThemes.length === 1) return `${uniqueThemes[0]} 흐름을 중심으로 재편되는 시장`;
+  if (uniqueThemes.length >= 2) return `${uniqueThemes[0]}과 ${uniqueThemes[1]}을 함께 본 하루`;
+  if (uniqueThemes.length === 1) return `${uniqueThemes[0]}을 중심으로 읽는 시장 변화`;
 
   const leadTitle = publicTitle(articles[0]?.title || "");
   return leadTitle && !isGenericLeadHeadline(leadTitle)
@@ -1462,7 +1456,7 @@ function fallbackBriefing() {
     leadHeadline: fallbackLeadHeadline(picked),
     leadSummary: fallbackLeadSummary(picked),
     watchPoints: fallbackWatchPoints(picked),
-    tags: ["패션업계", "브랜드", "유통", "트렌드"],
+    tags: fallbackTags(picked),
     articles: picked.map((item) => ({
       title: publicTitle(item.title),
       summary: fallbackSummaryBullets(item)[0],
@@ -1534,8 +1528,43 @@ function sameArticle(candidate, article) {
   );
 }
 
+function fallbackTags(articles = []) {
+  const text = articles
+    .map((article) => `${article.title || ""} ${article.summary || ""} ${(article.summaryBullets || []).join(" ")} ${article.category || ""}`)
+    .join(" ")
+    .toLowerCase();
+  const rules = [
+    { tag: "스포츠웨어", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
+    { tag: "ESG", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
+    { tag: "유럽진출", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출)/i },
+    { tag: "뷰티유통", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
+    { tag: "헤리티지", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
+    { tag: "기능성소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐)/i },
+    { tag: "오프라인", pattern: /(오프라인|팝업|매장|상권|백화점|체험|공간)/i },
+    { tag: "플랫폼", pattern: /(플랫폼|이커머스|온라인|무신사|쿠팡|아마존)/i },
+    { tag: "공급망", pattern: /(공급망|소싱|관세|통관|강제노동|원가)/i },
+    { tag: "어덜트", pattern: /(어덜트|4050|5060|중장년|여성복|남성복|캐주얼)/i },
+  ];
+  const tags = rules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.tag);
+  return [...new Set(tags)].slice(0, 3);
+}
+
+function normalizeIssueTags(tags = [], articles = []) {
+  const genericTags = new Set(["패션업계", "브랜드", "유통", "트렌드"]);
+  const articleTags = fallbackTags(articles);
+  const cleaned = (Array.isArray(tags) ? tags : [])
+    .map((tag) => cleanSummaryText(tag).replace(/\s+/g, ""))
+    .filter((tag) => tag && !genericTags.has(tag));
+  return [...new Set([...articleTags, ...cleaned])].slice(0, 3);
+}
+
+function isRepeatedArchiveTitle(title = "") {
+  const normalized = publicTitle(title).replace(/\s+/g, "");
+  return issues.slice(0, 3).some((issue) => publicTitle(issue.title).replace(/\s+/g, "") === normalized);
+}
+
 function toBriefingArticle(item) {
-  const summaryBullets = fallbackSummaryBullets(item);
+  const summaryBullets = normalizeSummaryBullets(item);
   return {
     title: publicTitle(item.title),
     summary: summaryBullets[0],
@@ -1548,47 +1577,68 @@ function toBriefingArticle(item) {
   };
 }
 
+function safeBriefingArticle(item) {
+  try {
+    return toBriefingArticle(item);
+  } catch (error) {
+    console.warn("Skipping article that failed quality gate: " + (item.title || "untitled") + ". " + error.message);
+    return null;
+  }
+}
+
 function isAdultItem(item) {
   return /(어덜트|adult|4050|5060|중장년)/i.test(`${item.title || ""} ${item.description || ""}`);
 }
 
-function normalizeBriefingArticles(articles) {
-  const normalized = articles.map((article) => {
-    const candidate = candidates.find((item) => sameArticle(item, article));
-    const base = candidate || article;
-    const cleanTitle = bestTitle(article.title, candidate?.title);
-    const genericImpact =
-      !article.impact ||
-      article.impact.length < 18 ||
-      /관련 브랜드와 유통 전략|확인할 수 있는 소식/.test(article.impact);
+function normalizeModelArticle(article) {
+  const candidate = candidates.find((item) => sameArticle(item, article));
+  const base = candidate || article;
+  const cleanTitle = bestTitle(article.title, candidate?.title);
+  const genericImpact =
+    !article.impact ||
+    article.impact.length < 18 ||
+    /관련 브랜드와 유통 전략|확인할 수 있는 소식/.test(article.impact);
 
-    const normalizedArticle = {
-      ...article,
-      // The model can occasionally reattach a publisher name even after the
-      // source title was cleaned, so enforce the public-title rule last.
-      title: publicTitle(cleanTitle || article.title || candidate?.title),
-      summary: cleanSummaryText(article.summary || candidate?.description || cleanTitle),
-      impact: genericImpact ? fallbackImpact(base) : article.impact,
-      category: article.category || inferCategory(base),
-      source: article.source || candidate?.source || "출처 확인 필요",
-      publishedAt: article.publishedAt || normalizeArticleDate(candidate?.publishedAt),
-      url: article.url || candidate?.url,
-    };
-    normalizedArticle.summaryBullets = normalizeSummaryBullets({
-      ...base,
-      ...normalizedArticle,
-      summaryBullets: article.summaryBullets,
-      summary: normalizedArticle.summary,
-    });
-    normalizedArticle.summary = normalizedArticle.summaryBullets[0] || normalizedArticle.summary;
-    normalizedArticle.impact = qualityBullet(normalizedArticle.impact, fallbackImpact(base));
-    return normalizedArticle;
+  const normalizedArticle = {
+    ...article,
+    // The model can occasionally reattach a publisher name even after the
+    // source title was cleaned, so enforce the public-title rule last.
+    title: publicTitle(cleanTitle || article.title || candidate?.title),
+    summary: cleanSummaryText(article.summary || candidate?.description || cleanTitle),
+    impact: genericImpact ? fallbackImpact(base) : article.impact,
+    category: article.category || inferCategory(base),
+    source: article.source || candidate?.source || "출처 확인 필요",
+    publishedAt: article.publishedAt || normalizeArticleDate(candidate?.publishedAt),
+    url: article.url || candidate?.url,
+  };
+  normalizedArticle.summaryBullets = normalizeSummaryBullets({
+    ...base,
+    ...normalizedArticle,
+    summaryBullets: article.summaryBullets,
+    summary: normalizedArticle.summary,
   });
+  normalizedArticle.summary = normalizedArticle.summaryBullets[0] || normalizedArticle.summary;
+  normalizedArticle.impact = qualityBullet(normalizedArticle.impact, fallbackImpact(base));
+  return normalizedArticle;
+}
+
+function safeNormalizeModelArticle(article) {
+  try {
+    return normalizeModelArticle(article);
+  } catch (error) {
+    console.warn("Skipping selected article that failed quality gate: " + (article.title || "untitled") + ". " + error.message);
+    return null;
+  }
+}
+
+function normalizeBriefingArticles(articles) {
+  const normalized = articles.map(safeNormalizeModelArticle).filter(Boolean);
 
   const adultCandidate = candidates.find(isAdultItem);
   const alreadyIncluded = adultCandidate && normalized.some((article) => sameArticle(adultCandidate, article));
   if (adultCandidate && !alreadyIncluded) {
-    normalized.unshift(toBriefingArticle(adultCandidate));
+    const adultArticle = safeBriefingArticle(adultCandidate);
+    if (adultArticle) normalized.unshift(adultArticle);
   }
 
   const selected = [];
@@ -1623,8 +1673,15 @@ function normalizeBriefingArticles(articles) {
   candidates
     .sort((a, b) => priorityScore(b) - priorityScore(a))
     .forEach((item) => {
-      if (selected.length < ARTICLE_LIMIT) addArticle(toBriefingArticle(item));
+      if (selected.length < ARTICLE_LIMIT) {
+        const article = safeBriefingArticle(item);
+        if (article) addArticle(article);
+      }
     });
+
+  if (selected.length < ARTICLE_LIMIT) {
+    console.warn("Only " + selected.length + " articles passed quality checks.");
+  }
 
   return selected.slice(0, ARTICLE_LIMIT);
 }
@@ -1776,13 +1833,18 @@ const weeklySignals = await fetchWeeklySignals();
 briefing.articles = normalizeBriefingArticles(briefing.articles || []);
 const fallbackHeadline = fallbackLeadHeadline(briefing.articles);
 briefing.leadHeadline = publicTitle(briefing.leadHeadline || fallbackHeadline);
-if (isGenericLeadHeadline(briefing.leadHeadline)) {
+if (isGenericLeadHeadline(briefing.leadHeadline) || isRepeatedArchiveTitle(briefing.leadHeadline)) {
   briefing.leadHeadline = fallbackHeadline;
+}
+if (isRepeatedArchiveTitle(briefing.leadHeadline)) {
+  const leadTitle = publicTitle(briefing.articles[0]?.title || "");
+  briefing.leadHeadline = leadTitle && !isGenericLeadHeadline(leadTitle) ? leadTitle.slice(0, 42) : fallbackHeadline;
 }
 briefing.leadSummary = cleanSummaryText(briefing.leadSummary || fallbackLeadSummary(briefing.articles));
 if (isGenericLeadHeadline(briefing.leadSummary)) {
   briefing.leadSummary = fallbackLeadSummary(briefing.articles);
 }
+briefing.tags = normalizeIssueTags(briefing.tags, briefing.articles);
 briefing.watchPoints = normalizeWatchPoints(briefing, briefing.articles);
 
 const usedImages = new Set();
