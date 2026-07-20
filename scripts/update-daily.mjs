@@ -1887,9 +1887,10 @@ const issueHeadlines = enrichedArticles
   .filter(Boolean)
   .slice(0, ARTICLE_LIMIT);
 
+const renderedSummaryBullets = new Set();
 const articleCards = enrichedArticles
   .map((article) => {
-    const summaryBullets = normalizeSummaryBullets(article);
+    const summaryBullets = normalizeSummaryBullets(article, renderedSummaryBullets);
     return `
       <article>
         <div class="meta">${escapeHtml(article.category)} · ${escapeHtml(article.publishedAt)}</div>
