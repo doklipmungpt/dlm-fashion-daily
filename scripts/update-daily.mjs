@@ -1,4 +1,4 @@
-import fs from "node:fs/promises";
+﻿import fs from "node:fs/promises";
 import path from "node:path";
 
 const ROOT = process.cwd();
@@ -302,7 +302,7 @@ function publicTitle(value = "") {
 }
 
 function cleanSummaryText(value = "") {
-  return stripTags(value)
+  return repairKoreanText(stripTags(value)
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&#39;|&apos;/gi, "'")
@@ -315,6 +315,15 @@ function cleanSummaryText(value = "") {
     .replace(/^(독립문|PAT|피에이티)\s*(관점|유사|관련)?\s*[-–—|:：,]?\s*/i, "")
     .replace(/^(어덜트\s*캐주얼|중장년\s*캐주얼|유사\s*브랜드)\s*[-–—|:：,]?\s*/i, "")
     .replace(/\s*[-–—|:：]\s*(firstviewkorea|fashion insight|hypebeast|무신사\s*뉴스룸|어패럴뉴스|패션비즈|패션엔|패션포스트|한국섬유신문|chosunbiz|조선비즈)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim());
+}
+
+function repairKoreanText(value = "") {
+  return String(value || "")
+    .replace(/소재과/g, "소재와")
+    .replace(/소재을/g, "소재를")
+    .replace(/접점과/g, "접점과")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -353,10 +362,13 @@ function looksTruncated(value = "") {
   if (!cleaned) return true;
   if (/\.{2,}|…|\.{3}$/.test(cleaned)) return true;
   if (/[,·ㆍ:;-–—]$/.test(cleaned)) return true;
+  if (/^(시|만|고|며|서|서도|에도|에서|으로|로|과|와|은|는|이|가|을|를|의|도|또|및)\s+/.test(cleaned)) return true;
+  if (/^(시|만|고)\s*[가-힣]{2,}/.test(cleaned)) return true;
+  if (/^(시 콘텐츠|만 기업|고 답한|고 언급|며 밝혔다|서 확산|으로 이동)/.test(cleaned)) return true;
   if (/\d+\.$/.test(cleaned) || /^\d+(?:\.\d+)?%/.test(cleaned)) return true;
   if (/\d+$/.test(cleaned)) return true;
   if (/\s다$/.test(cleaned)) return true;
-  if (/(조성이|내용이|정보가|사례가|활용 사례를|가능성이|시장이)\s*다$/.test(cleaned)) return true;
+  if (/(조성이|내용이|정보가|사례가|활용 사례를|가능성이|시장이|유지하겠다|회복이라기보다)\s*다?$/.test(cleaned)) return true;
   if (/^(시 성장|성장 궤도|관련 흐름|해당 흐름|이 이슈|이번 이슈)\s/.test(cleaned)) return true;
   if (/^(스는|업은|사는|[가-힣]\s+[A-Z0-9])\s*/.test(cleaned)) return true;
   if (/(크로커다|올리비아|데일리|인디|브랜|아디다|나이|패션그룹형지의 여성복 브랜드 크로커다)$/.test(cleaned)) return true;
@@ -1179,7 +1191,7 @@ leadHeadline과 각 기사 title 끝에는 언론사명, 출처명, 사이트명
 leadHeadline에는 "국내 패션 업계", "주요 뉴스 업데이트", "오늘 확인할 만한 업계 소식" 같은 일반 문구를 쓰지 마라.
 leadHeadline은 오늘 선택한 6개 기사 중 가장 헤드라인이 될 만한 이슈나 공통 흐름을 한 줄로 요약하라.
 leadHeadline은 24자 이상 42자 이하의 자연스러운 한국어 제목으로 작성하라.
-leadHeadline에서 조사가 어색해질 수 있는 "A과 B이", "A와 B이", "A과 B가" 형태를 쓰지 마라. 불확실하면 "A·B 흐름이 맞물린 하루"처럼 조사 충돌이 없는 구조로 작성하라.
+leadHeadline에서 조사가 어색해질 수 있는 "소재과", "소재을", "A과 B이", "A와 B이", "A과 B가" 형태를 쓰지 마라. 불확실하면 "A·B 흐름이 맞물린 하루"처럼 조사 충돌이 없는 구조로 작성하라.
 상권 기사는 개별 브랜드의 단순 입점, 오픈, 팝업 소식보다 지역·권역 단위의 소비 흐름, 상권 변화, 유동인구, 유통망 분석을 우선 선택하라.
 개별 브랜드가 특정 매장에 입점했다는 내용만 있는 후보는 중요도가 매우 높지 않으면 선택하지 마라.
 기사에 없는 사실이나 숫자를 만들지 마라. 제목과 출처 정보만으로 확신할 수 없는 내용은 단정하지 마라.
@@ -1187,6 +1199,8 @@ leadHeadline에서 조사가 어색해질 수 있는 "A과 B이", "A와 B이", "
 summaryBullets는 반드시 3개를 작성하라.
 summaryBullets는 각 항목 100자 이하의 완결된 한국어 문장으로 작성하라.
 summaryBullets는 문장 중간에서 끊기면 안 된다. 확실하지 않으면 짧은 완결문으로 다시 써라.
+summaryBullets는 앞 단어가 잘린 "시 콘텐츠로", "만 기업", "고 답한", "으로 이동" 같은 문장 조각으로 시작하면 안 된다.
+summaryBullets는 원문 문장 일부를 중간부터 가져오지 말고, 주어와 서술어가 있는 새 문장으로 다시 써라.
 기사 본문 일부를 그대로 길게 복사하지 말고, 핵심 사실을 짧게 재작성하라.
 summaryBullets에 말줄임표, 끊긴 문장, HTML 엔티티, 제목만 반복한 문장을 넣지 마라.
 HTML 엔티티, &nbsp;, 언론사명 꼬리, 기자명, 출처명은 모든 공개 문장에 넣지 마라.
@@ -1415,8 +1429,8 @@ function fallbackLeadHeadline(articles = []) {
 
   const themes = themeRules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.label);
   const uniqueThemes = [...new Set(themes)].slice(0, 2);
-  if (uniqueThemes.length >= 2) return `${uniqueThemes[0]}과 ${uniqueThemes[1]}을 함께 본 하루`;
-  if (uniqueThemes.length === 1) return `${uniqueThemes[0]}을 중심으로 읽는 시장 변화`;
+  if (uniqueThemes.length >= 2) return `${uniqueThemes[0]}·${uniqueThemes[1]} 흐름이 맞물린 하루`;
+  if (uniqueThemes.length === 1) return `${uniqueThemes[0]} 흐름을 중심으로 읽는 시장 변화`;
 
   const leadTitle = publicTitle(articles[0]?.title || "");
   return leadTitle && !isGenericLeadHeadline(leadTitle)
@@ -1837,7 +1851,7 @@ const weeklySignals = await fetchWeeklySignals();
 
 briefing.articles = normalizeBriefingArticles(briefing.articles || []);
 const fallbackHeadline = fallbackLeadHeadline(briefing.articles);
-briefing.leadHeadline = publicTitle(briefing.leadHeadline || fallbackHeadline);
+briefing.leadHeadline = repairKoreanText(publicTitle(briefing.leadHeadline || fallbackHeadline));
 if (isGenericLeadHeadline(briefing.leadHeadline) || isRepeatedArchiveTitle(briefing.leadHeadline)) {
   briefing.leadHeadline = fallbackHeadline;
 }
@@ -1994,3 +2008,4 @@ await fs.writeFile(
 );
 
 console.log(`Updated Fashion Daily for ${date} with ${briefing.articles.length} articles.`);
+
