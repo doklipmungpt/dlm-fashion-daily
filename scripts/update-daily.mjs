@@ -1,4 +1,4 @@
-﻿import fs from "node:fs/promises";
+﻿﻿import fs from "node:fs/promises";
 import path from "node:path";
 
 const ROOT = process.cwd();
@@ -525,7 +525,7 @@ function summaryBulletKey(value = "") {
 
 function isGenericSummaryBullet(value = "") {
   const text = cleanSummaryText(value);
-  return /관련 흐름이 오늘 주요 기사|관련 변화는 상품, 채널|관련 유통 변화|단순 소식보다 매출 구조|브랜드 운영과 상품 기획|브랜드 운영과 상품·유통 전략|브랜드 운영과 유통 전략|유통 채널과 소비 흐름|상품 기획과 채널 운영 관점|상품 기획, 고객 접점, 채널 운영|고객 수요와 시즌 대응|참고할 만한 업계 신호|참고할 만한 업계 흐름|참고 신호|참고할 만한 소식입니다|매장 체류 경험과 온라인 접점의 조합|온라인과 오프라인 접점의 역할|고객 접점 확대가 실제 매출 효율|지역 상권과 오프라인 소비 흐름|브랜드의 성장성과 수익 구조|실적 개선이 일회성 성과인지|상품 기획과 유통 운영|고객 수요 변화에 맞춘 브랜드 대응/.test(text);
+  return /관련 흐름이 오늘 주요 기사|관련 변화는 상품, 채널|관련 유통 변화|단순 소식보다 매출 구조|단기 화제성보다 실제 판매와 고객 반응|브랜드 운영과 상품 기획|브랜드 운영과 상품·유통 전략|브랜드 운영과 유통 전략|유통 채널과 소비 흐름|상품 기획과 채널 운영 관점|상품 기획, 고객 접점, 채널 운영|고객 수요와 시즌 대응|참고할 만한 업계 신호|참고할 만한 업계 흐름|참고 신호|참고할 만한 소식입니다|매장 체류 경험과 온라인 접점의 조합|온라인과 오프라인 접점의 역할|고객 접점 확대가 실제 매출 효율|지역 상권과 오프라인 소비 흐름|브랜드의 성장성과 수익 구조|실적 개선이 일회성 성과인지|상품 기획과 유통 운영|고객 수요 변화에 맞춘 브랜드 대응/.test(text);
 }
 
 function leadingSummarySubjectKey(value = "") {
@@ -560,12 +560,10 @@ function normalizeSummaryBullets(article, usedSummaryBullets = new Set()) {
     const subject = titleSubject(article.title || "해당 기사");
     const rescueBullets = [
       ...titleSpecificBullets(article),
-      "이 이슈는 단기 화제성보다 실제 판매와 고객 반응으로 이어지는지 점검해야 합니다.",
-      "브랜드는 고객 접점 확대와 상품 경험 설계가 함께 맞물릴 때 효과를 키울 수 있습니다.",
-      "시장 대응 속도와 운영 실행력이 실제 성과로 이어지는지 후속 흐름을 볼 필요가 있습니다.",
-      "상품 기획, 유통 채널, 브랜드 스토리 중 어디에 무게를 두는지 확인해야 합니다.",
-      "기사에서 확인되는 변화는 고객층 확장과 브랜드 운영 방향을 함께 보여줍니다.",
-      `${subject} 관련 변화는 상품, 채널, 운영 전략 중 어디에 영향을 주는지 확인할 필요가 있습니다.`,
+      `${subject} 이슈는 기사에서 확인된 변화가 상품 기획과 고객 접점에 어떻게 연결되는지 보게 합니다.`,
+      `${subject} 흐름은 브랜드 운영 방식과 채널 전략을 함께 점검하게 하는 사례입니다.`,
+      `${subject} 관련 변화는 시즌 수요, 상품 구성, 고객 반응을 함께 살펴볼 필요가 있습니다.`,
+      `${subject} 사례는 브랜드가 어떤 고객층과 접점을 넓히려 하는지 확인하게 합니다.`,
     ];
     for (const bullet of rescueBullets) {
       const cleanedBullet = cleanSummaryText(bullet);
@@ -620,6 +618,12 @@ function clusterTitleKey(value = "") {
     "출시",
     "강화",
     "개선",
+    "폭염",
+    "냉감",
+    "자외선",
+    "기능성",
+    "인견",
+    "장마",
     "상권",
   ].filter((word) => compact.includes(word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")));
 
@@ -1038,6 +1042,12 @@ const directSources = [
     patterns: [/ktnews\.com\/news\/articleView\.html/i],
     limit: 36,
   },
+  {
+    homeUrl: "https://www.fashionn.com/",
+    source: "패션엔",
+    patterns: [/fashionn\.com\/board\/read_new\.php/i],
+    limit: 36,
+  },
 ];
 
 const directItems = await settledFlat(directSources.map(fetchDirectSource));
@@ -1127,10 +1137,14 @@ const seen = new Set();
 function priorityScore(item) {
   const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
   const sourceText = `${item.source || ""} ${item.url || ""}`.toLowerCase();
-  let score = item.sourceType === "direct" ? 20 : 0;
-  // Images only break close ties. Article relevance remains the main selector.
-  if (item.imageUrl && !isLowResolutionImage(item.imageUrl)) score += 12;
-  else if (item.imageUrl) score += 4;
+  let score = item.sourceType === "direct" ? 45 : 0;
+  // Keep relevance first, but do not let image-rich original-source articles
+  // lose to Google News duplicates that cannot expose article images.
+  if (item.sourceType === "direct" && item.imageUrl && !isLowResolutionImage(item.imageUrl)) score += 90;
+  else if (item.sourceType === "direct" && item.imageUrl) score += 45;
+  else if (item.imageUrl && !isLowResolutionImage(item.imageUrl)) score += 30;
+  else if (item.imageUrl) score += 12;
+  else if (item.sourceType === "google-news") score -= 18;
   const itemDate = articleDateString(item.publishedAt);
   if (itemDate === preferredArticleDate) score += 90;
   else if (itemDate === date) score += 35;
@@ -1369,7 +1383,7 @@ function impactCandidates(item) {
   const subject = titleSubject(item.title || "해당 기사");
   candidates.push(
     `${subject} 흐름은 브랜드 정체성, 고객 접점, 상품 운영 중 어디에 영향을 주는지 점검할 필요가 있습니다.`,
-    `${subject} 사례는 단기 화제성보다 실제 판매와 고객 반응으로 이어지는지 확인해야 합니다.`,
+    `${subject} 사례는 기사에서 확인된 변화가 브랜드 운영과 채널 전략에 어떻게 연결되는지 보게 합니다.`,
     `${subject} 이슈는 상품 기획과 채널 운영의 우선순위를 다시 보게 하는 신호입니다.`,
   );
 
@@ -1642,8 +1656,22 @@ function isAdultItem(item) {
   return /(어덜트|adult|4050|5060|중장년)/i.test(`${item.title || ""} ${item.description || ""}`);
 }
 
+function candidateImageRank(item) {
+  let score = priorityScore(item);
+  if (item?.sourceType === "direct") score += 80;
+  if (item?.imageUrl && !isLowResolutionImage(item.imageUrl)) score += 120;
+  else if (item?.imageUrl) score += 50;
+  return score;
+}
+
+function bestCandidateForArticle(article) {
+  return candidates
+    .filter((item) => sameArticle(item, article))
+    .sort((a, b) => candidateImageRank(b) - candidateImageRank(a))[0];
+}
+
 function normalizeModelArticle(article) {
-  const candidate = candidates.find((item) => sameArticle(item, article));
+  const candidate = bestCandidateForArticle(article);
   const base = candidate || article;
   const cleanTitle = bestTitle(article.title, candidate?.title);
   const genericImpact =
@@ -1661,7 +1689,7 @@ function normalizeModelArticle(article) {
     category: article.category || inferCategory(base),
     source: article.source || candidate?.source || "출처 확인 필요",
     publishedAt: article.publishedAt || normalizeArticleDate(candidate?.publishedAt),
-    url: article.url || candidate?.url,
+    url: candidate?.url || article.url,
   };
   normalizedArticle.summaryBullets = normalizeSummaryBullets({
     ...base,
@@ -1746,11 +1774,15 @@ async function chooseArticleImage(article, usedImages) {
     usedImages.add(key);
     return image;
   };
-  const candidate = candidates.find((item) => sameArticle(item, article));
-  const candidateImage = candidate?.imageUrl || "";
-  if (candidateImage && !isLowResolutionImage(candidateImage)) {
-    const acceptedCandidate = accept(candidateImage);
-    if (acceptedCandidate) return acceptedCandidate;
+  const sameCandidates = candidates
+    .filter((item) => sameArticle(item, article))
+    .sort((a, b) => candidateImageRank(b) - candidateImageRank(a));
+  for (const item of sameCandidates) {
+    const candidateImage = item?.imageUrl || "";
+    if (candidateImage && !isLowResolutionImage(candidateImage)) {
+      const acceptedCandidate = accept(candidateImage);
+      if (acceptedCandidate) return acceptedCandidate;
+    }
   }
 
   const pageImage = await fetchPageImage(article.url);
@@ -1759,8 +1791,10 @@ async function chooseArticleImage(article, usedImages) {
 
   // Keep a small source thumbnail as the final fallback; do not discard a
   // relevant article merely because its available image is low resolution.
-  const fallbackImage = accept(candidateImage);
-  if (fallbackImage) return fallbackImage;
+  for (const item of sameCandidates) {
+    const fallbackImage = accept(item?.imageUrl || "");
+    if (fallbackImage) return fallbackImage;
+  }
 
   return "";
 }
@@ -2041,4 +2075,5 @@ await fs.writeFile(
 );
 
 console.log(`Updated Fashion Daily for ${date} with ${briefing.articles.length} articles.`);
+
 
