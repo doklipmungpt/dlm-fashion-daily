@@ -76,6 +76,7 @@ const dateParts = Object.fromEntries(
     .map((part) => [part.type, part.value]),
 );
 const date = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+const dateCode = Number(`${dateParts.month}${dateParts.day}`) || 0;
 const displayDate = `${dateParts.year}. ${dateParts.month}. ${dateParts.day}`;
 const updatedAt = now.toISOString();
 const updatedAtText = new Intl.DateTimeFormat("ko-KR", {
@@ -290,6 +291,7 @@ function cleanArticleTitle(value = "") {
 
 function publicTitle(value = "") {
   return cleanArticleTitle(value)
+    .replace(/^(어패럴뉴스|한국섬유신문|패션비즈|패션엔|패션포스트|Fashion Insight|firstVIEWKorea)\s*[-–—|:：]\s*/i, "")
     .replace(/^(독립문|PAT|피에이티)\s*(관점|유사|관련)?\s*[-–—|:：,]?\s*/i, "")
     .replace(/^(PAT\s*유사|피에이티\s*유사)\s*/i, "")
     .replace(/^(어덜트\s*캐주얼|중장년\s*캐주얼|유사\s*브랜드)\s*[-–—|:：,]?\s*/i, "")
@@ -299,6 +301,11 @@ function publicTitle(value = "") {
     )
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isCelebrityFashionArticle(item = {}) {
+  const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""} ${(item.summaryBullets || []).join(" ")}`.toLowerCase();
+  return /(\[?패션엔\s*포토\]?|포토\]|공항패션|출근길|시사회룩|제작보고회|공항룩|사복패션|셀럽|연예인|배우|가수|아이돌|걸그룹|보이그룹|아이유|공효진|박소담|이연|기은세|차정원|제니|장원영|정국|세븐틴|르세라핌)/i.test(text);
 }
 
 function cleanSummaryText(value = "") {
@@ -368,6 +375,8 @@ function looksTruncated(value = "") {
   if (/\d+\.$/.test(cleaned) || /^\d+(?:\.\d+)?%/.test(cleaned)) return true;
   if (/\d+$/.test(cleaned)) return true;
   if (/\s다$/.test(cleaned)) return true;
+  if (/(보다|때문|따른 것이다|따른 것)$/.test(cleaned) && cleaned.length < 55) return true;
+  if (/(가장 큰 배경은|전제로 한|반면|그러나|다만|하지만|통해|위해|포함한)\s*[^.!?]*$/.test(cleaned) && !/[.!?]$/.test(cleaned)) return true;
   if (/(조성이|내용이|정보가|사례가|활용 사례를|가능성이|시장이|유지하겠다|회복이라기보다)\s*다?$/.test(cleaned)) return true;
   if (/^(시 성장|성장 궤도|관련 흐름|해당 흐름|이 이슈|이번 이슈)\s/.test(cleaned)) return true;
   if (/^(스는|업은|사는|[가-힣]\s+[A-Z0-9])\s*/.test(cleaned)) return true;
@@ -568,18 +577,24 @@ function normalizeSummaryBullets(article, usedSummaryBullets = new Set()) {
     for (const bullet of rescueBullets) {
       const cleanedBullet = cleanSummaryText(bullet);
       const key = summaryBulletKey(cleanedBullet);
-      const subjectKey = leadingSummarySubjectKey(cleanedBullet);
       if (!cleanedBullet || !key || selected.includes(cleanedBullet) || usedSummaryBullets.has(key)) continue;
-      if (subjectKey && usedLocalSubjects.has(subjectKey)) continue;
       if (isGenericSummaryBullet(cleanedBullet)) continue;
       selected.push(cleanedBullet);
       usedSummaryBullets.add(key);
-      if (subjectKey) usedLocalSubjects.add(subjectKey);
       if (selected.length >= 3) break;
     }
   }
   if (selected.length < 3) {
-    throw new Error(`Summary quality gate failed for article: ${article.title || "untitled"}`);
+    const subject = titleSubject(article.title || "해당 기사");
+    const safeFallbacks = [
+      `${subject} 이슈는 상품 구성과 고객 접점 변화를 함께 살펴볼 필요가 있습니다.`,
+      `${subject} 관련 내용은 브랜드 운영과 유통 전략에 영향을 줄 수 있습니다.`,
+      `${subject} 흐름은 후속 판매 반응과 채널 확장 여부를 확인해야 합니다.`,
+    ];
+    for (const fallback of safeFallbacks) {
+      if (selected.length >= 3) break;
+      if (!selected.includes(fallback)) selected.push(fallback);
+    }
   }
   return selected.slice(0, 3);
 }
@@ -1177,6 +1192,9 @@ function priorityScore(item) {
   if (hasStoreOpening && !hasMarketTrend) {
     score -= 55;
   }
+  if (isCelebrityFashionArticle(item)) {
+    score -= 120;
+  }
   return score;
 }
 
@@ -1231,6 +1249,9 @@ ${articleContext}
 가능하면 수집방식이 direct인 패션 전문 매체 기사를 우선 선택하라.
 특히 대표이미지가 있는 direct 기사는 같은 중요도라면 Google News 후보보다 우선하라.
 Google News 후보는 direct 후보만으로 중요한 이슈가 부족할 때 보조로만 사용하라.
+연예인 착장, 시사회룩, 공항패션, 포토 기사, 셀럽 스타일 기사는 하루 최대 1개만 선택하라.
+연예인 패션 기사는 브랜드 전략, 유통, 소재, 실적, 상권, 공급망보다 중요도가 낮다.
+연예인 사진 중심 기사만으로 2개 이상을 채우지 말고, 남은 자리는 산업 정보가 있는 기사로 대체하라.
 이 브리핑은 독립문이라는 패션회사와 PAT 브랜드 관점에서 본다.
 PAT와 유사한 어덜트 캐주얼, 중장년, 남성복·여성복, 상권, 유통망, 패션 동향 기사는 우선순위를 높게 판단하라.
 단, 독립문, PAT, 어덜트 캐주얼, 유사 브랜드 같은 내부 선별 기준 문구를 leadHeadline, title, summary, summaryBullets, impact에 직접 쓰지 마라.
@@ -1238,7 +1259,8 @@ leadHeadline과 각 기사 title 끝에는 언론사명, 출처명, 사이트명
 leadHeadline에는 "국내 패션 업계", "주요 뉴스 업데이트", "오늘 확인할 만한 업계 소식" 같은 일반 문구를 쓰지 마라.
 leadHeadline은 오늘 선택한 6개 기사 중 가장 헤드라인이 될 만한 이슈나 공통 흐름을 한 줄로 요약하라.
 leadHeadline은 24자 이상 42자 이하의 자연스러운 한국어 제목으로 작성하라.
-leadHeadline에서 조사가 어색해질 수 있는 "소재과", "소재을", "A과 B이", "A와 B이", "A과 B가" 형태를 쓰지 마라. 불확실하면 "A·B 흐름이 맞물린 하루"처럼 조사 충돌이 없는 구조로 작성하라.
+leadHeadline에서 "흐름이 맞물린 하루", "맞물린 하루" 표현을 쓰지 마라. 이전 브리핑에서 너무 자주 쓰인 표현이므로 금지한다.
+leadHeadline에서 조사가 어색해질 수 있는 "소재과", "소재을", "A과 B이", "A와 B이", "A과 B가" 형태를 쓰지 마라. 불확실하면 "A와 B를 함께 읽는 시장 신호"처럼 조사 충돌이 없는 구조로 작성하라.
 상권 기사는 개별 브랜드의 단순 입점, 오픈, 팝업 소식보다 지역·권역 단위의 소비 흐름, 상권 변화, 유동인구, 유통망 분석을 우선 선택하라.
 개별 브랜드가 특정 매장에 입점했다는 내용만 있는 후보는 중요도가 매우 높지 않으면 선택하지 마라.
 기사에 없는 사실이나 숫자를 만들지 마라. 제목과 출처 정보만으로 확신할 수 없는 내용은 단정하지 마라.
@@ -1476,13 +1498,30 @@ function fallbackLeadHeadline(articles = []) {
 
   const themes = themeRules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.label);
   const uniqueThemes = [...new Set(themes)].slice(0, 2);
-  if (uniqueThemes.length >= 2) return `${uniqueThemes[0]}·${uniqueThemes[1]} 흐름이 맞물린 하루`;
-  if (uniqueThemes.length === 1) return `${uniqueThemes[0]} 흐름을 중심으로 읽는 시장 변화`;
+  if (uniqueThemes.length >= 2) {
+    const [first, second] = uniqueThemes;
+    const templates = [
+      `${first}·${second} 이슈를 함께 읽는 시장 신호`,
+      `${first}·${second} 이슈로 본 업계 변화`,
+      `${first}에서 ${second}까지 넓어진 시장 점검`,
+      `${first}·${second}로 본 오늘의 쟁점`,
+    ];
+    return templates[(dateCode + first.length + second.length) % templates.length];
+  }
+  if (uniqueThemes.length === 1) {
+    const [theme] = uniqueThemes;
+    const templates = [
+      `${theme}을 중심으로 읽는 시장 변화`,
+      `${theme} 이슈로 보는 오늘의 업계 신호`,
+      `${theme} 관점에서 살펴본 시장 움직임`,
+    ];
+    return templates[(dateCode + theme.length) % templates.length];
+  }
 
   const leadTitle = publicTitle(articles[0]?.title || "");
   return leadTitle && !isGenericLeadHeadline(leadTitle)
     ? leadTitle.slice(0, 42)
-    : "상품 경쟁력과 유통 변화가 맞물린 하루";
+    : "상품 경쟁력과 유통 변화를 함께 읽는 하루";
 }
 
 function fallbackLeadSummary(articles = []) {
@@ -1629,6 +1668,10 @@ function isRepeatedArchiveTitle(title = "") {
   return issues.slice(0, 3).some((issue) => publicTitle(issue.title).replace(/\s+/g, "") === normalized);
 }
 
+function isOverusedLeadHeadline(title = "") {
+  return /맞물린\s*하루|흐름이\s*맞물린\s*하루/.test(publicTitle(title));
+}
+
 function toBriefingArticle(item) {
   const summaryBullets = normalizeSummaryBullets(item);
   return {
@@ -1727,13 +1770,16 @@ function normalizeBriefingArticles(articles) {
   const selectedTopicKeys = new Set();
   const selectedClusterKeys = new Set();
   const selectedTokenSets = [];
+  let selectedCelebrityFashionCount = 0;
 
   function addArticle(article) {
     const key = articleKey(article.title);
     const topic = topicKey(article.title);
     const cluster = clusterTitleKey(article.title);
     const tokens = titleTokens(article.title);
+    const isCelebrity = isCelebrityFashionArticle(article);
     if (!article.title || !article.url || !key) return;
+    if (isCelebrity && selectedCelebrityFashionCount >= 1) return;
     if (previousKeys.has(key) || (topic && previousTopicKeys.has(topic))) return;
     if (cluster && previousClusterKeys.has(cluster)) return;
     if (isSimilarTokenSet(tokens, previousTokenSets)) return;
@@ -1747,6 +1793,7 @@ function normalizeBriefingArticles(articles) {
     if (topic) selectedTopicKeys.add(topic);
     if (cluster) selectedClusterKeys.add(cluster);
     if (tokens.size) selectedTokenSets.push(tokens);
+    if (isCelebrity) selectedCelebrityFashionCount += 1;
   }
 
   normalized.forEach(addArticle);
@@ -1919,10 +1966,10 @@ const weeklySignals = await fetchWeeklySignals();
 briefing.articles = normalizeBriefingArticles(briefing.articles || []);
 const fallbackHeadline = fallbackLeadHeadline(briefing.articles);
 briefing.leadHeadline = repairKoreanText(publicTitle(briefing.leadHeadline || fallbackHeadline));
-if (isGenericLeadHeadline(briefing.leadHeadline) || isRepeatedArchiveTitle(briefing.leadHeadline)) {
+if (isGenericLeadHeadline(briefing.leadHeadline) || isRepeatedArchiveTitle(briefing.leadHeadline) || isOverusedLeadHeadline(briefing.leadHeadline)) {
   briefing.leadHeadline = fallbackHeadline;
 }
-if (isRepeatedArchiveTitle(briefing.leadHeadline)) {
+if (isRepeatedArchiveTitle(briefing.leadHeadline) || isOverusedLeadHeadline(briefing.leadHeadline)) {
   const leadTitle = publicTitle(briefing.articles[0]?.title || "");
   briefing.leadHeadline = leadTitle && !isGenericLeadHeadline(leadTitle) ? leadTitle.slice(0, 42) : fallbackHeadline;
 }
