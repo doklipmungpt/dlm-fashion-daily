@@ -234,6 +234,31 @@ const storeOpeningKeywords = [
   "신규 매장",
 ];
 
+const beautyKeywords = [
+  "뷰티",
+  "k뷰티",
+  "k-뷰티",
+  "화장품",
+  "스킨케어",
+  "메이크업",
+  "토너",
+  "앰플",
+  "세럼",
+  "샴푸",
+  "두피",
+  "피부",
+  "향수",
+  "바디케어",
+  "올리브영",
+  "로레알",
+  "토니모리",
+  "아로마티카",
+  "이퀄베리",
+  "코스메틱",
+  "cosmetic",
+  "beauty",
+];
+
 const sourceTailPattern =
   /(어패럴뉴스|한국섬유신문|패션비즈|패션인사이트|이투데이|매일경제|한국경제|서울경제|헤럴드경제|파이낸셜뉴스|뉴시스|뉴스1|조선비즈|머니투데이|아시아경제|문화일보|연합뉴스|테넌트뉴스|tenant\s*news|ktnews|뉴스|신문|경제|일보|투데이|저널)$/i;
 
@@ -306,6 +331,11 @@ function publicTitle(value = "") {
 function isCelebrityFashionArticle(item = {}) {
   const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""} ${(item.summaryBullets || []).join(" ")}`.toLowerCase();
   return /(\[?패션엔\s*포토\]?|포토\]|공항패션|출근길|시사회룩|제작보고회|공항룩|사복패션|셀럽|연예인|배우|가수|아이돌|걸그룹|보이그룹|아이유|공효진|박소담|이연|기은세|차정원|제니|장원영|정국|세븐틴|르세라핌)/i.test(text);
+}
+
+function isBeautyArticle(item = {}) {
+  const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""} ${(item.summaryBullets || []).join(" ")} ${item.category || ""}`.toLowerCase();
+  return beautyKeywords.some((keyword) => text.includes(keyword.toLowerCase()));
 }
 
 function cleanSummaryText(value = "") {
@@ -1192,6 +1222,9 @@ function priorityScore(item) {
   if (hasStoreOpening && !hasMarketTrend) {
     score -= 55;
   }
+  if (isBeautyArticle(item)) {
+    score -= 140;
+  }
   if (isCelebrityFashionArticle(item)) {
     score -= 120;
   }
@@ -1252,6 +1285,10 @@ Google News 후보는 direct 후보만으로 중요한 이슈가 부족할 때 �
 연예인 착장, 시사회룩, 공항패션, 포토 기사, 셀럽 스타일 기사는 하루 최대 1개만 선택하라.
 연예인 패션 기사는 브랜드 전략, 유통, 소재, 실적, 상권, 공급망보다 중요도가 낮다.
 연예인 사진 중심 기사만으로 2개 이상을 채우지 말고, 남은 자리는 산업 정보가 있는 기사로 대체하라.
+뷰티, 화장품, 스킨케어, 메이크업 중심 기사는 하루 최대 1개만 선택하라.
+패션·유통·소재·브랜드·상권·공급망 기사만으로 6개를 채우기 어려울 때만 뷰티 기사를 최대 2개까지 허용하라.
+뷰티 기사는 보조 카테고리로만 다루고, leadHeadline과 첫 번째 대표 기사에는 뷰티 이슈를 올리지 마라.
+leadHeadline, leadSummary, watchPoints, tags를 뷰티 중심으로 작성하지 말고 패션 산업 관점의 변화가 먼저 보이게 하라.
 이 브리핑은 독립문이라는 패션회사와 PAT 브랜드 관점에서 본다.
 PAT와 유사한 어덜트 캐주얼, 중장년, 남성복·여성복, 상권, 유통망, 패션 동향 기사는 우선순위를 높게 판단하라.
 단, 독립문, PAT, 어덜트 캐주얼, 유사 브랜드 같은 내부 선별 기준 문구를 leadHeadline, title, summary, summaryBullets, impact에 직접 쓰지 마라.
@@ -1487,7 +1524,7 @@ function fallbackLeadHeadline(articles = []) {
     { label: "스포츠웨어 미디어 경쟁", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
     { label: "ESG·지역사회 접점", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
     { label: "유럽 오프라인 진출", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출)/i },
-    { label: "뷰티 유통 다변화", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
+    { label: "유통 다변화", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
     { label: "헤리티지·장인정신", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
     { label: "기능성 소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐|공급망|소싱)/i },
     { label: "오프라인 접점", pattern: /(오프라인|팝업|매장|상권|백화점|유통|체험|공간)/i },
@@ -1771,15 +1808,24 @@ function normalizeBriefingArticles(articles) {
   const selectedClusterKeys = new Set();
   const selectedTokenSets = [];
   let selectedCelebrityFashionCount = 0;
+  let selectedBeautyCount = 0;
 
-  function addArticle(article) {
+  function articlePriority(article) {
+    const candidate = candidates.find((item) => sameArticle(item, article)) || article;
+    return priorityScore(candidate);
+  }
+
+  function addArticle(article, options = {}) {
     const key = articleKey(article.title);
     const topic = topicKey(article.title);
     const cluster = clusterTitleKey(article.title);
     const tokens = titleTokens(article.title);
     const isCelebrity = isCelebrityFashionArticle(article);
+    const isBeauty = isBeautyArticle(article);
+    const beautyLimit = options.allowSecondBeauty ? 2 : 1;
     if (!article.title || !article.url || !key) return;
     if (isCelebrity && selectedCelebrityFashionCount >= 1) return;
+    if (isBeauty && selectedBeautyCount >= beautyLimit) return;
     if (previousKeys.has(key) || (topic && previousTopicKeys.has(topic))) return;
     if (cluster && previousClusterKeys.has(cluster)) return;
     if (isSimilarTokenSet(tokens, previousTokenSets)) return;
@@ -1794,17 +1840,33 @@ function normalizeBriefingArticles(articles) {
     if (cluster) selectedClusterKeys.add(cluster);
     if (tokens.size) selectedTokenSets.push(tokens);
     if (isCelebrity) selectedCelebrityFashionCount += 1;
+    if (isBeauty) selectedBeautyCount += 1;
   }
 
-  normalized.forEach(addArticle);
-  candidates
-    .sort((a, b) => priorityScore(b) - priorityScore(a))
+  normalized
+    .sort((a, b) => Number(isBeautyArticle(a)) - Number(isBeautyArticle(b)) || articlePriority(b) - articlePriority(a))
+    .forEach((article) => addArticle(article));
+
+  const sortedCandidates = [...candidates].sort((a, b) => priorityScore(b) - priorityScore(a));
+  sortedCandidates
+    .filter((item) => !isBeautyArticle(item))
     .forEach((item) => {
       if (selected.length < ARTICLE_LIMIT) {
         const article = safeBriefingArticle(item);
         if (article) addArticle(article);
       }
     });
+
+  if (selected.length < ARTICLE_LIMIT) {
+    sortedCandidates
+      .filter((item) => isBeautyArticle(item))
+      .forEach((item) => {
+        if (selected.length < ARTICLE_LIMIT) {
+          const article = safeBriefingArticle(item);
+          if (article) addArticle(article, { allowSecondBeauty: true });
+        }
+      });
+  }
 
   if (selected.length < ARTICLE_LIMIT) {
     console.warn("Only " + selected.length + " articles passed quality checks.");
@@ -2004,12 +2066,27 @@ const withoutImages = enrichedDraft
 const imageLead = withImages.slice(0, 3);
 const relevanceRest = [...withImages.slice(3), ...withoutImages].sort(relevanceSort);
 const usedImpacts = new Set();
-const enrichedArticles = [...imageLead, ...relevanceRest].slice(0, ARTICLE_LIMIT).map((article) => ({
+function moveBeautyAwayFromLead(articles = []) {
+  const ordered = [...articles];
+  if (!ordered.length || !isBeautyArticle(ordered[0])) return ordered;
+  const nonBeautyIndex = ordered.findIndex((article, index) => index > 0 && !isBeautyArticle(article));
+  if (nonBeautyIndex < 0) return ordered;
+  const [nonBeautyArticle] = ordered.splice(nonBeautyIndex, 1);
+  ordered.unshift(nonBeautyArticle);
+  return ordered;
+}
+
+const enrichedArticles = moveBeautyAwayFromLead([...imageLead, ...relevanceRest])
+  .slice(0, ARTICLE_LIMIT)
+  .map((article) => ({
   ...article,
   impact: uniqueImpactForArticle(article, usedImpacts),
 }));
 
-const issueCoverImage = enrichedArticles.find((article) => isUsableArticleImage(article.image))?.image || "";
+const issueCoverImage =
+  enrichedArticles.find((article) => !isBeautyArticle(article) && isUsableArticleImage(article.image))?.image ||
+  enrichedArticles.find((article) => isUsableArticleImage(article.image))?.image ||
+  "";
 const issueHeadlines = enrichedArticles
   .map((article) => publicTitle(article.title))
   .filter(Boolean)
