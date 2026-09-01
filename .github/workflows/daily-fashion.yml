@@ -3,11 +3,9 @@
 on:
   schedule:
     # GitHub Actions cron uses UTC.
-    # 22:10 UTC Sunday-Thursday = 07:10 KST Monday-Friday primary run.
-    # 23:15 UTC Sunday-Thursday = 08:15 KST Monday-Friday backup run.
-    # The backup run skips generation when today's briefing already exists.
-    - cron: "10 22 * * 0-4"
-    - cron: "15 23 * * 0-4"
+    # 22:10,25,40,55 UTC Sunday-Thursday = 07:10, 07:25, 07:40, 07:55 KST Monday-Friday.
+    # Later checks skip generation when today's briefing already exists.
+    - cron: "10,25,40,55 22 * * 0-4"
   workflow_dispatch:
     inputs:
       target_date:
@@ -70,7 +68,7 @@ jobs:
           GITHUB_MODEL: openai/gpt-4.1-mini
           TARGET_DATE: ${{ inputs.target_date }}
         run: |
-          echo "DLM workflow v15: 07:10 KST primary and 08:15 KST backup with duplicate-date skip"
+          echo "DLM workflow v16: 07:10 KST plus 15-minute checks through 07:55 with duplicate-date skip"
           target_date="${TARGET_DATE:-$(TZ=Asia/Seoul date +%F)}"
           if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
             echo "No changes to commit."
