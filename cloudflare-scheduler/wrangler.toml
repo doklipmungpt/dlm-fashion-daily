@@ -11,7 +11,7 @@ SITE_DATA_URL = "https://dlm-fashion-daily.pages.dev/data/issues.js"
 
 [triggers]
 crons = [
-  "10,25,40,55 22 * * 0-4",
-  "10,25,40,55 23 * * 0-4",
-  "10,25,40,55 0 * * 1-5"
+  "10,25,40,55 22 * * SUN-THU",
+  "10,25,40,55 23 * * SUN-THU",
+  "10,25,40,55 0 * * MON-FRI"
 ]

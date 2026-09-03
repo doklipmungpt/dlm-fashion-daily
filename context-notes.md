@@ -13,3 +13,4 @@
 - GitHub schedule은 공식적으로 지연 또는 드롭될 수 있으므로, Cloudflare Worker Cron이 사이트 최신 날짜를 확인하고 누락 시 GitHub workflow_dispatch를 호출하는 별도 실행 경로를 준비하기로 했습니다.
 - `cloudflare-scheduler` Worker를 추가했습니다. 이 Worker는 사이트의 최신 브리핑 날짜가 오늘 KST가 아니고 최근 GitHub workflow run도 없을 때만 `workflow_dispatch`를 호출합니다.
 - Cloudflare secret `GITHUB_WORKFLOW_TOKEN`에는 `doklipmungpt/dlm-fashion-daily` workflow 실행 권한을 가진 `doklipmun` 또는 `doklipmungpt` 계열 GitHub 토큰을 넣어야 합니다. Cloudflare Wrangler 인증은 `dlmgpt@doklipmun.co.kr`로 전환됐고 Workers 권한도 확인했습니다.
+- Cloudflare Cron Triggers는 요일 숫자 기준이 GitHub와 달라 `0-4`가 실패했습니다. Cloudflare 쪽은 `SUN-THU`, `MON-FRI` 요일 약어를 사용하고, 07:10부터 09:55까지의 15분 단위 실행은 3개 cron 항목으로 유지합니다.
