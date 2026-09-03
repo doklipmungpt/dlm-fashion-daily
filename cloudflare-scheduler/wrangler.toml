@@ -1,0 +1,17 @@
+name = "dlm-fashion-daily-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-09-03"
+
+[vars]
+GITHUB_OWNER = "doklipmungpt"
+GITHUB_REPO = "dlm-fashion-daily"
+GITHUB_WORKFLOW_FILE = "daily-fashion.yml"
+GITHUB_REF = "main"
+SITE_DATA_URL = "https://dlm-fashion-daily.pages.dev/data/issues.js"
+
+[triggers]
+crons = [
+  "10,25,40,55 22 * * 0-4",
+  "10,25,40,55 23 * * 0-4",
+  "10,25,40,55 0 * * 1-5"
+]

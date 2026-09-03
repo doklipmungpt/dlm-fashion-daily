@@ -8,3 +8,8 @@
 - `isBeautyArticle` 판별을 추가하고, 뷰티 기사는 기본 1개까지만 선택하며 패션·유통·소재 기사만으로 6개를 채우지 못할 때만 최대 2개까지 허용하도록 했습니다.
 - 카드 정렬 후 첫 번째 기사와 커버 이미지는 가능하면 비뷰티 기사에서 선택하도록 보정했습니다.
 - 2026-08-18과 2026-08-19의 대표 제목은 뷰티 중심 표현을 제거해 패션·유통·공급망 중심으로 보이게 정리했습니다.
+- 2026-09-03 기준 GitHub Actions `schedule` 이벤트가 당일 오전에 생성되지 않는 현상을 확인했습니다. workflow 파일은 `main`에 있고 상태는 active였으나, 오늘 run은 0개였습니다.
+- GitHub scheduled workflow의 actor와 로컬 GitHub 인증, Wrangler 인증이 모두 `pse7077`로 확인되어, `doklipmungpt` 중심 운영 목적과 맞지 않는 상태입니다.
+- GitHub schedule은 공식적으로 지연 또는 드롭될 수 있으므로, Cloudflare Worker Cron이 사이트 최신 날짜를 확인하고 누락 시 GitHub workflow_dispatch를 호출하는 별도 실행 경로를 준비하기로 했습니다.
+- `cloudflare-scheduler` Worker를 추가했습니다. 이 Worker는 사이트의 최신 브리핑 날짜가 오늘 KST가 아니고 최근 GitHub workflow run도 없을 때만 `workflow_dispatch`를 호출합니다.
+- Cloudflare secret `GITHUB_WORKFLOW_TOKEN`에는 `doklipmungpt/dlm-fashion-daily` workflow 실행 권한을 가진 `doklipmun` 또는 `doklipmungpt` 계열 GitHub 토큰을 넣어야 합니다. Cloudflare Wrangler 인증은 `dlmgpt@doklipmun.co.kr`로 전환됐고 Workers 권한도 확인했습니다.
