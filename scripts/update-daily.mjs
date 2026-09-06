@@ -1297,7 +1297,9 @@ leadHeadline에는 "국내 패션 업계", "주요 뉴스 업데이트", "오늘
 leadHeadline은 오늘 선택한 6개 기사 중 가장 헤드라인이 될 만한 이슈나 공통 흐름을 한 줄로 요약하라.
 leadHeadline은 24자 이상 42자 이하의 자연스러운 한국어 제목으로 작성하라.
 leadHeadline에서 "흐름이 맞물린 하루", "맞물린 하루" 표현을 쓰지 마라. 이전 브리핑에서 너무 자주 쓰인 표현이므로 금지한다.
-leadHeadline에서 조사가 어색해질 수 있는 "소재과", "소재을", "A과 B이", "A와 B이", "A과 B가" 형태를 쓰지 마라. 불확실하면 "A와 B를 함께 읽는 시장 신호"처럼 조사 충돌이 없는 구조로 작성하라.
+leadHeadline에서 "오늘의 쟁점", "업계 변화", "시장 신호", "시장 움직임", "오늘 브리핑"처럼 어느 날짜에도 붙일 수 있는 반복형 끝맺음을 쓰지 마라.
+leadHeadline은 최소 하나 이상의 구체적인 기사 소재, 브랜드, 현상, 정책, 상품군을 포함해야 하며 단순 카테고리 2개를 이어 붙인 제목으로 끝내지 마라.
+leadHeadline에서 조사가 어색해질 수 있는 "소재과", "소재을", "A과 B이", "A와 B이", "A과 B가" 형태를 쓰지 마라. 불확실하면 "A와 B를 함께 점검"처럼 조사 충돌이 없는 구조로 작성하라.
 상권 기사는 개별 브랜드의 단순 입점, 오픈, 팝업 소식보다 지역·권역 단위의 소비 흐름, 상권 변화, 유동인구, 유통망 분석을 우선 선택하라.
 개별 브랜드가 특정 매장에 입점했다는 내용만 있는 후보는 중요도가 매우 높지 않으면 선택하지 마라.
 기사에 없는 사실이나 숫자를 만들지 마라. 제목과 출처 정보만으로 확신할 수 없는 내용은 단정하지 마라.
@@ -1514,51 +1516,114 @@ function isGenericLeadHeadline(value = "") {
   );
 }
 
-function fallbackLeadHeadline(articles = []) {
+const leadThemeRules = [
+  { label: "스포츠웨어 미디어 경쟁", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
+  { label: "ESG·지역사회 접점", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
+  { label: "해외 유통 확장", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출|직소싱)/i },
+  { label: "뷰티 유통 다변화", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
+  { label: "헤리티지·장인정신", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
+  { label: "기능성 소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐|공급망|소싱)/i },
+  { label: "오프라인 접점", pattern: /(오프라인|팝업|매장|상권|백화점|유통|체험|공간|플래그십)/i },
+  { label: "소비 변화", pattern: /(럭셔리|명품|소비|성장|고객|판매|셔츠|수요|반응)/i },
+  { label: "AI 전환", pattern: /(ai|인공지능|테크|플랫폼|디자인|이커머스|ax)/i },
+  { label: "상품 전략", pattern: /(여성복|남성복|spa|어덜트|중장년|캐주얼|캠페인|컬렉션)/i },
+  { label: "디자이너 컬렉션", pattern: /(서울패션위크|컬렉션|디자이너|런웨이|실루엣|쿠튀르)/i },
+  { label: "기후 대응 상품", pattern: /(폭염|장마|겨울|냉감|발수|자외선|기후|날씨)/i },
+];
+
+function leadThemesFromText(text = "", limit = 3) {
+  return [...new Set(leadThemeRules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.label))].slice(0, limit);
+}
+
+function leadTitleHistory(limit = 60) {
+  return issues
+    .filter((issue) => issue.date !== date)
+    .map((issue) => publicTitle(issue.title))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function leadTemplateKey(value = "") {
+  const title = publicTitle(value);
+  const templates = [
+    { key: "today_issue", pattern: /오늘의\s*쟁점/ },
+    { key: "industry_change", pattern: /업계\s*변화/ },
+    { key: "market_signal", pattern: /시장\s*신호|업계\s*신호/ },
+    { key: "market_movement", pattern: /시장\s*움직임/ },
+    { key: "market_check", pattern: /시장\s*점검|오늘\s*브리핑/ },
+    { key: "together_read", pattern: /함께\s*읽는/ },
+  ];
+  return templates.find((template) => template.pattern.test(title))?.key || "";
+}
+
+function leadThemeKey(value = "") {
+  const themes = leadThemesFromText(publicTitle(value), 3);
+  return themes.length ? themes.sort().join("|") : "";
+}
+
+function isSimilarLeadTitle(title = "", previousTitle = "") {
+  const tokens = titleTokens(title);
+  const previousTokens = titleTokens(previousTitle);
+  if (!tokens.size || !previousTokens.size) return false;
+  const intersection = [...tokens].filter((token) => previousTokens.has(token)).length;
+  const smaller = Math.min(tokens.size, previousTokens.size);
+  const union = new Set([...tokens, ...previousTokens]).size;
+  return (intersection >= 2 && intersection / smaller >= 0.67) || (intersection >= 3 && intersection / union >= 0.38);
+}
+
+function conciseLeadSubject(value = "") {
+  const cleaned = publicTitle(value)
+    .replace(/\s+/g, " ")
+    .replace(/\s*\.\.\.\s*/g, "…")
+    .replace(/\s*[|｜].*$/g, "")
+    .trim();
+  const [firstPart] = cleaned.split(/[?!]/);
+  const subject = firstPart
+    .split(/…|,|;/)[0]
+    .replace(/^[\["'‘“]+|[\]"'’”]+$/g, "")
+    .trim();
+  if (subject.length >= 12 && subject.length <= 24) return subject;
+  if (subject.length > 24) return subject.slice(0, 24).replace(/\s+\S*$/, "");
+  return subject;
+}
+
+function leadHeadlineCandidates(articles = []) {
   const text = articles
     .map((article) => `${article.title || ""} ${article.summary || ""} ${(article.summaryBullets || []).join(" ")}`)
-    .join(" ")
-    .toLowerCase();
+    .join(" ");
+  const themes = leadThemesFromText(text, 4);
+  const subjects = articles
+    .map((article) => conciseLeadSubject(article.title))
+    .filter((subject) => subject && !isGenericLeadHeadline(subject));
+  const candidates = [];
 
-  const themeRules = [
-    { label: "스포츠웨어 미디어 경쟁", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
-    { label: "ESG·지역사회 접점", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
-    { label: "유럽 오프라인 진출", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출)/i },
-    { label: "유통 다변화", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
-    { label: "헤리티지·장인정신", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
-    { label: "기능성 소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐|공급망|소싱)/i },
-    { label: "오프라인 접점", pattern: /(오프라인|팝업|매장|상권|백화점|유통|체험|공간)/i },
-    { label: "소비 변화", pattern: /(럭셔리|명품|소비|성장|고객|판매|셔츠)/i },
-    { label: "AI 전환", pattern: /(ai|인공지능|테크|플랫폼|디자인|이커머스)/i },
-    { label: "상품 전략", pattern: /(여성복|남성복|spa|어덜트|중장년|캐주얼)/i },
-  ];
+  if (subjects[0] && themes[0]) candidates.push(`${subjects[0]}로 본 ${themes[0]} 흐름`);
+  if (subjects[0] && themes[1]) candidates.push(`${subjects[0]}와 ${themes[1]} 대응 포인트`);
+  if (subjects[0] && subjects[1]) candidates.push(`${subjects[0]}와 ${subjects[1]}를 함께 점검`);
+  if (themes[0] && themes[1]) {
+    candidates.push(`${themes[0]}와 ${themes[1]} 대응 전략`);
+    candidates.push(`${themes[0]} 속 ${themes[1]} 변화`);
+    candidates.push(`${themes[0]} 경쟁과 ${themes[1]} 확장`);
+  }
+  if (themes[0]) {
+    candidates.push(`${themes[0]} 중심으로 본 상품·채널 대응`);
+    candidates.push(`${themes[0]} 이슈가 던진 운영 과제`);
+  }
+  candidates.push(...subjects.map((subject) => subject.slice(0, 42)));
+  candidates.push("상품 경쟁력과 유통 변화를 다시 점검한 브리핑");
 
-  const themes = themeRules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.label);
-  const uniqueThemes = [...new Set(themes)].slice(0, 2);
-  if (uniqueThemes.length >= 2) {
-    const [first, second] = uniqueThemes;
-    const templates = [
-      `${first}·${second} 이슈를 함께 읽는 시장 신호`,
-      `${first}·${second} 이슈로 본 업계 변화`,
-      `${first}에서 ${second}까지 넓어진 시장 점검`,
-      `${first}·${second}로 본 오늘의 쟁점`,
-    ];
-    return templates[(dateCode + first.length + second.length) % templates.length];
-  }
-  if (uniqueThemes.length === 1) {
-    const [theme] = uniqueThemes;
-    const templates = [
-      `${theme}을 중심으로 읽는 시장 변화`,
-      `${theme} 이슈로 보는 오늘의 업계 신호`,
-      `${theme} 관점에서 살펴본 시장 움직임`,
-    ];
-    return templates[(dateCode + theme.length) % templates.length];
-  }
+  return [...new Set(candidates.map((candidate) => publicTitle(candidate)).filter((candidate) => candidate.length >= 18))];
+}
+
+function fallbackLeadHeadline(articles = []) {
+  const candidates = leadHeadlineCandidates(articles);
+  const freshCandidate = candidates.find((candidate) => !isRepeatedArchiveTitle(candidate) && !isOverusedLeadHeadline(candidate));
+  if (freshCandidate) return freshCandidate;
 
   const leadTitle = publicTitle(articles[0]?.title || "");
   return leadTitle && !isGenericLeadHeadline(leadTitle)
     ? leadTitle.slice(0, 42)
-    : "상품 경쟁력과 유통 변화를 함께 읽는 하루";
+    : "상품 경쟁력과 유통 변화를 다시 점검한 브리핑";
 }
 
 function fallbackLeadSummary(articles = []) {
@@ -1702,11 +1767,22 @@ function normalizeIssueTags(tags = [], articles = []) {
 
 function isRepeatedArchiveTitle(title = "") {
   const normalized = publicTitle(title).replace(/\s+/g, "");
-  return issues.slice(0, 3).some((issue) => publicTitle(issue.title).replace(/\s+/g, "") === normalized);
+  return leadTitleHistory(60).some((previous) => publicTitle(previous).replace(/\s+/g, "") === normalized);
 }
 
 function isOverusedLeadHeadline(title = "") {
-  return /맞물린\s*하루|흐름이\s*맞물린\s*하루/.test(publicTitle(title));
+  const cleanTitle = publicTitle(title);
+  if (/맞물린\s*하루|흐름이\s*맞물린\s*하루/.test(cleanTitle)) return true;
+  if (/오늘의\s*쟁점|오늘\s*브리핑|오늘의\s*업계\s*신호/.test(cleanTitle)) return true;
+
+  const template = leadTemplateKey(cleanTitle);
+  const theme = leadThemeKey(cleanTitle);
+  const recentTitles = leadTitleHistory(30);
+  if (template && recentTitles.slice(0, 7).some((previous) => leadTemplateKey(previous) === template)) return true;
+  if (template && theme && recentTitles.some((previous) => leadTemplateKey(previous) === template && leadThemeKey(previous) === theme)) {
+    return true;
+  }
+  return recentTitles.slice(0, 12).some((previous) => isSimilarLeadTitle(cleanTitle, previous));
 }
 
 function toBriefingArticle(item) {

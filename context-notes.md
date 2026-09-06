@@ -14,3 +14,7 @@
 - `cloudflare-scheduler` Worker를 추가했습니다. 이 Worker는 사이트의 최신 브리핑 날짜가 오늘 KST가 아니고 최근 GitHub workflow run도 없을 때만 `workflow_dispatch`를 호출합니다.
 - Cloudflare secret `GITHUB_WORKFLOW_TOKEN`에는 `doklipmungpt/dlm-fashion-daily` workflow 실행 권한을 가진 `doklipmun` 또는 `doklipmungpt` 계열 GitHub 토큰을 넣어야 합니다. Cloudflare Wrangler 인증은 `dlmgpt@doklipmun.co.kr`로 전환됐고 Workers 권한도 확인했습니다.
 - Cloudflare Cron Triggers는 요일 숫자 기준이 GitHub와 달라 `0-4`가 실패했습니다. Cloudflare 쪽은 `SUN-THU`, `MON-FRI` 요일 약어를 사용하고, 07:10부터 09:55까지의 15분 단위 실행은 3개 cron 항목으로 유지합니다.
+- 2026-09-07 화면에서 `오늘의 쟁점`, `업계 변화`, `시장 신호` 같은 대표 제목 문장틀이 반복되는 문제가 다시 확인됐습니다.
+- 기존 코드는 최근 3개 제목의 완전 동일 여부와 `맞물린 하루`만 차단해서, 같은 주제 조합을 다른 템플릿으로 반복하는 경우를 막지 못했습니다.
+- 대표 제목 후처리에 최근 60개 완전 동일 제목 차단, 최근 30개 템플릿·주제 조합 차단, 최근 12개 토큰 유사도 차단을 추가했습니다.
+- 최근 15개 대표 제목에서 반복형 금지 문구와 완전 중복 제목이 0개인지 검사했습니다.
