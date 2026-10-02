@@ -799,6 +799,21 @@ function bestTitle(...values) {
     .sort((a, b) => titleScore(b) - titleScore(a))[0] || "";
 }
 
+function compactArticleTitle(value = "") {
+  const title = publicTitle(value).replace(/^\[(종합|단독|기획|특집)\]\s*/, "");
+  if (title.length <= 48) return title;
+  const keywordHeading = title.match(/^(.+?트렌드\s*키워드\s*\d+)(?:\s|$)/);
+  if (keywordHeading && keywordHeading[1].length <= 48) return keywordHeading[1];
+  const heading = title.split(/!\s+|\?\s+|…|\.{3}|\s+[|｜]\s+/)[0].trim();
+  return heading.length >= 12 && heading.length <= 48 ? heading : title;
+}
+
+function articleDisplayTitle(...values) {
+  const titles = values.map(compactArticleTitle).filter(Boolean);
+  return titles.find((title) => title.length >= 8 && title.length <= 48)
+    || compactArticleTitle(bestTitle(...values));
+}
+
 function getTag(block, tag) {
   const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
   return match ? decodeXml(match[1]).trim() : "";
@@ -1293,6 +1308,9 @@ leadHeadline, leadSummary, watchPoints, tags를 뷰티 중심으로 작성하지
 PAT와 유사한 어덜트 캐주얼, 중장년, 남성복·여성복, 상권, 유통망, 패션 동향 기사는 우선순위를 높게 판단하라.
 단, 독립문, PAT, 어덜트 캐주얼, 유사 브랜드 같은 내부 선별 기준 문구를 leadHeadline, title, summary, summaryBullets, impact에 직접 쓰지 마라.
 leadHeadline과 각 기사 title 끝에는 언론사명, 출처명, 사이트명, 기자명, 도메인을 절대 붙이지 마라.
+각 기사 title은 브랜드·주체와 핵심 사건, 중요한 연도·숫자를 남겨 48자 이하로 압축하라.
+긴 원문 제목의 부제, 직무·상품·스타일의 긴 나열, 제목 뒤에 붙은 설명 문장을 title에 복사하지 마라.
+title은 단어나 브랜드명 중간을 자르거나 말줄임표로 끝내지 말고 자연스럽게 완결하라.
 leadHeadline에는 "국내 패션 업계", "주요 뉴스 업데이트", "오늘 확인할 만한 업계 소식" 같은 일반 문구를 쓰지 마라.
 leadHeadline은 오늘 선택한 6개 기사 중 가장 헤드라인이 될 만한 이슈나 공통 흐름을 한 줄로 요약하라.
 leadHeadline은 24자 이상 42자 이하의 자연스러운 한국어 제목으로 작성하라.
@@ -1829,7 +1847,7 @@ function bestCandidateForArticle(article) {
 function normalizeModelArticle(article) {
   const candidate = bestCandidateForArticle(article);
   const base = candidate || article;
-  const cleanTitle = bestTitle(article.title, candidate?.title);
+  const cleanTitle = articleDisplayTitle(article.title, candidate?.title);
   const genericImpact =
     !article.impact ||
     article.impact.length < 18 ||
