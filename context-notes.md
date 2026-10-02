@@ -24,3 +24,4 @@
 - node scripts/test-article-titles.mjs에서 간결한 생성 제목 우선 선택, 긴 원문 대체, 키워드 나열 제거, 소수점 보존, 출처 제거, 빈 제목 및 안전한 경계가 없는 제목을 검사했습니다. 오늘 메인 데이터와 상세 페이지의 6개 제목도 일치하고 모두 48자 이하였습니다.
 - node --check scripts/update-daily.mjs와 git -c core.whitespace=cr-at-eol diff --check를 통과했습니다. 기존 Windows 줄바꿈을 유지했습니다.
 - GitHub push는 github.com:443에 로컬 프록시 127.0.0.1을 통해 연결하지 못해 실패했습니다. 인증 오류가 아니라 네트워크 오류이며 원격과 Cloudflare 배포에는 아직 반영되지 않았습니다.
+- 네트워크 접근이 활성화된 뒤 66790f2 커밋을 main에 푸시했습니다. https://dlm-fashion-daily.pages.dev의 메인, 오늘 상세 페이지, data/issues.js 모두 HTTP 200이며 두 압축 제목이 상세 페이지와 메인 데이터에 반영됐습니다. 아카이브 데이터는 81개이고 최신 날짜는 2026-10-02였습니다.
