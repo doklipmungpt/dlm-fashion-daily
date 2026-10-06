@@ -368,14 +368,10 @@ function repairKoreanText(value = "") {
 function sentenceParts(value = "") {
   const cleaned = cleanSummaryText(value);
   if (!cleaned) return [];
-  const spaced = cleaned
-    .replace(/([.!?。！？])(?=[^\s])/g, "$1 ")
-    .replace(/(다\.?)(?=[가-힣A-Z0-9])/g, "$1 ");
-  return spaced
-    .split(/(?<=[.!?。！？])\s+|(?<=다)\s+/)
-    .map((item) => item.replace(/^[·•\-\s]+/, "").trim())
+  return [...new Intl.Segmenter("ko", { granularity: "sentence" }).segment(cleaned)]
+    .map(({ segment }) => segment.replace(/^[·•\-\s]+/, "").trim())
     .filter((item) => item.length >= 8)
-    .slice(0, 6);
+    .slice(0, 12);
 }
 
 function conciseBullet(value = "", fallback = "") {
@@ -391,7 +387,7 @@ function conciseBullet(value = "", fallback = "") {
 
 function isCompleteKoreanSentence(value = "") {
   const cleaned = cleanSummaryText(value);
-  return /[.!?다]$/.test(cleaned) || /(합니다|했습니다|됩니다|있습니다|없습니다|보입니다|밝혔습니다|전망입니다|사례입니다|흐름입니다)$/.test(cleaned);
+  return /[.!?]$/.test(cleaned) || /[가-힣](한다|했다|된다|됐다|이다|였다|있다|없다|었다|았다|는다|니다)$/.test(cleaned);
 }
 
 function looksTruncated(value = "") {
@@ -402,6 +398,7 @@ function looksTruncated(value = "") {
   if (/^(시|만|고|며|서|서도|에도|에서|으로|로|과|와|은|는|이|가|을|를|의|도|또|및)\s+/.test(cleaned)) return true;
   if (/^(시|만|고)\s*[가-힣]{2,}/.test(cleaned)) return true;
   if (/^(시 콘텐츠|만 기업|고 답한|고 언급|며 밝혔다|서 확산|으로 이동)/.test(cleaned)) return true;
+  if (/^(움과|름다움|름과)\s/.test(cleaned)) return true;
   if (/\d+\.$/.test(cleaned) || /^\d+(?:\.\d+)?%/.test(cleaned)) return true;
   if (/\d+$/.test(cleaned)) return true;
   if (/\s다$/.test(cleaned)) return true;
@@ -422,136 +419,18 @@ function qualityBullet(value = "", fallback = "") {
 }
 
 function titleSubject(value = "") {
-  const title = publicTitle(value);
+  const title = compactArticleTitle(value);
   const match = title.match(/^([^,，·ㆍ…]+?)(?:,|·|ㆍ|…|\\s)/);
-  return cleanSummaryText(match?.[1] || title.split(/[,…]/)[0] || title).slice(0, 24);
-}
-
-function titleSpecificBullets(item) {
-  const title = publicTitle(item.title || "");
-  const subject = titleSubject(title);
-  if (!title || !subject) return [];
-
-  const bullets = [];
-  const percent = title.match(/(\d+(?:\.\d+)?)\s*%/);
-  const money = title.match(/(\d+(?:,\d{3})*|\d+)\s*(억|조)\s*원?/);
-
-  if (/영업이익|실적|매출|성장|수익/.test(title)) {
-    bullets.push(`${subject}는 ${percent ? `${percent[1]}%` : "실적"} 성장 흐름을 내세우며 수익성 개선을 강조했습니다.`);
-    bullets.push(`${subject}의 실적 개선은 브랜드 운영 효율과 비용 구조를 함께 점검하게 합니다.`);
-    bullets.push("복지, 조직 운영, 매출 성과가 함께 언급돼 장기적인 체질 개선 여부를 볼 만합니다.");
-  }
-  if (/출시|선봬|공개|론칭|발매/.test(title)) {
-    bullets.push(`${subject}는 신규 상품 출시를 통해 시즌 수요와 고객 접점을 확대하고 있습니다.`);
-    bullets.push("신제품의 소재, 기능, 가격대가 실제 구매 전환으로 이어질지 확인이 필요합니다.");
-  }
-  if (/유통|매장|팝업|온라인|아마존|무신사|백화점|플랫폼/.test(title)) {
-    bullets.push(`${subject} 흐름은 판매 채널보다 매장 체류 경험과 고객 유입 구조를 함께 보게 합니다.`);
-    bullets.push("온라인과 오프라인 접점의 조합이 브랜드 노출과 매출 효율에 영향을 줄 수 있습니다.");
-  }
-  if (/해외|글로벌|수출|미국|중국|일본|대만|동남아/.test(title)) {
-    bullets.push(`${subject}의 해외 관련 흐름은 시장 확장과 현지 유통 전략을 함께 확인하게 합니다.`);
-    bullets.push("해외 시장 대응은 가격, 소싱, 브랜딩 전략에 직접적인 영향을 줄 수 있습니다.");
-  }
-  if (/소재|원단|기능성|냉감|방수|아웃도어/.test(title)) {
-    bullets.push(`${subject} 관련 소재·기능성 이슈는 상품 차별화와 착용 경험을 함께 보여줍니다.`);
-    bullets.push("계절 수요와 기능성 소재가 결합될 때 상품 기획 우선순위가 달라질 수 있습니다.");
-  }
-  if (/공급망|폭염|의류공장|노동|납기|생산/.test(title)) {
-    bullets.push(`${subject} 이슈는 생산 환경과 납기 안정성이 공급망 리스크로 연결될 수 있음을 보여줍니다.`);
-    bullets.push("글로벌 브랜드는 원가뿐 아니라 공장 환경과 작업 조건까지 관리해야 하는 부담이 커지고 있습니다.");
-  }
-  if (/라벨|혼방|EU|소재 조성|부정확|재활용/.test(title)) {
-    bullets.push(`${subject} 이슈는 소재 표기와 품질 데이터의 정확성이 유통 신뢰도에 영향을 준다는 점을 보여줍니다.`);
-    bullets.push("라벨 정보 오류는 통관, 판매 중단, 재활용 비용까지 이어질 수 있는 운영 리스크입니다.");
-  }
-  if (/협업|콜라보|IP|캐릭터|콘텐츠|전시|디자이너/.test(title)) {
-    bullets.push(`${subject} 이슈는 브랜드 스토리와 콘텐츠 자산을 상품 경험으로 확장하는 흐름입니다.`);
-    bullets.push("협업과 콘텐츠 활용은 신규 고객 유입과 브랜드 화제성을 만드는 수단이 될 수 있습니다.");
-  }
-  if (/정국|셀럽|착용|커스텀|발렌시아가|무대|공연/.test(title)) {
-    bullets.push("셀럽 착용 이슈는 무대 노출이 럭셔리 브랜드의 이미지 확산으로 이어지는 사례입니다.");
-    bullets.push("공연 의상 협업은 브랜드가 팬덤과 글로벌 고객 접점을 넓히는 방식으로 활용됩니다.");
-    bullets.push("커스텀 룩은 상품 판매보다 브랜드 화제성과 문화적 노출을 만드는 데 의미가 있습니다.");
-  }
-  if (/혁신\s*프리미어|정부|선정|지원사업|스타트업|투자|육성/.test(title)) {
-    bullets.push("정부 지원사업 선정은 기업의 성장성과 사업 확장 가능성을 외부에서 인정받은 신호입니다.");
-    bullets.push("플랫폼 기반 브랜드는 기술 개발과 운영 역량을 함께 강화할 기회를 얻을 수 있습니다.");
-    bullets.push("정책 지원은 단기 매출보다 중장기 투자와 서비스 고도화 관점에서 볼 필요가 있습니다.");
-  }
-  if (/lego|레고|브릭|클림트|the kiss|아트|art/i.test(title)) {
-    bullets.push("아트 IP 상품은 예술 콘텐츠를 수집형 라이프스타일 제품으로 확장하는 사례입니다.");
-    bullets.push("브릭 기반 재현 상품은 팬덤과 선물 수요를 동시에 겨냥하는 콘텐츠 전략으로 볼 수 있습니다.");
-    bullets.push("문화 자산을 상품화할 때는 원작 인지도와 제품 완성도가 구매 동기를 좌우합니다.");
-  }
-  if (/스포츠웨어|아디다스|나이키|월드컵|미디어|MIV|런치메트릭스/.test(title)) {
-    bullets.push(`${subject} 이슈는 스포츠 이벤트가 브랜드 미디어 영향력과 판매 경쟁으로 이어지는 흐름입니다.`);
-    bullets.push("스타 선수와 대형 스포츠 이벤트가 브랜드 선호도와 제품 구매 의향에 미치는 영향을 볼 필요가 있습니다.");
-    bullets.push("미디어 노출 지표와 실제 소비자 평가가 다를 수 있어 캠페인 성과를 입체적으로 봐야 합니다.");
-  }
-  if (/헤리티지|다음세대|장광효|인터뷰|아카이브|전통|세대/.test(title)) {
-    bullets.push(`${subject} 이슈는 브랜드가 축적한 정체성을 다음 고객층에게 전달하는 방식과 연결됩니다.`);
-    bullets.push("헤리티지 자산을 상품, 전시, 콘텐츠로 확장할 때 고객 접점 설계가 중요합니다.");
-    bullets.push("세대 전환 관점에서 브랜드 스토리와 실제 상품 경험이 일관되게 이어지는지 볼 필요가 있습니다.");
-  }
-  if (/장인정신|명품|유럽|마켓|트로아|럭셔리/.test(title)) {
-    bullets.push(`${subject}는 장인정신과 헤리티지를 해외 시장 진출의 차별화 요소로 내세우고 있습니다.`);
-    bullets.push("유럽 시장에서 수공예 기반 브랜드가 어떤 고객층과 유통 접점을 확보하는지 볼 필요가 있습니다.");
-    bullets.push("브랜드 스토리, 생산 방식, 현지 채널이 함께 맞물려야 지속적인 해외 확장이 가능합니다.");
-  }
-  if (money) {
-    bullets.push(`${subject}는 ${money[0]} 규모의 사업 목표나 성과를 통해 성장 가능성을 강조했습니다.`);
-  }
-
-  return [...new Set(bullets)]
-    .map((bullet) => qualityBullet(bullet, ""))
-    .filter(Boolean);
+  return cleanSummaryText(match?.[1] || title.split(/[,…]/)[0] || title);
 }
 
 function fallbackSummaryBullets(item) {
-  const parts = sentenceParts(item.description || item.summary || item.title)
-    .map((part) => conciseBullet(part, ""))
-    .filter((part) => part && !isGenericSummaryBullet(part) && !looksTruncated(part));
-  const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""}`.toLowerCase();
-  const contextBullets = [];
-
-  if (/세정|한성|형지|인동|pat|올포유|웰메이드|올리비아로렌|크로커다일레이디|인디안|데일리스트|엘리트학생복|캐리스노트/i.test(text)) {
-    contextBullets.push(
-      "관련 브랜드의 시즌 상품 구성과 가격 전략을 함께 확인할 수 있습니다.",
-      "중장년 고객층을 겨냥한 상품 기획과 고객 접점 운영을 비교해 볼 만합니다.",
-      "기존 브랜드가 날씨와 시즌 수요에 대응하는 방식을 보여주는 사례입니다.",
-    );
-  }
-  if (/무신사|플랫폼|온라인|커머스|검색량|판매|기획전|특가전|세일|프로모션|쿠팡|팝업|편집숍/i.test(text)) {
-    contextBullets.push(
-      "판매 채널에서 확인되는 수요 변화와 시즌 상품 반응을 살펴볼 수 있습니다.",
-      "온라인과 오프라인 접점을 연결하는 운영 방식이 눈에 띕니다.",
-      "기획전과 팝업을 통해 고객 유입을 만드는 방식이 참고됩니다.",
-    );
-  }
-  if (/상권|오프라인|매장|백화점|팝업|편집숍|송도|성수|명동|더현대|아울렛/i.test(text)) {
-    contextBullets.push(
-      "오프라인 접점 확대가 브랜드 경험과 지역 고객 유입에 미치는 영향을 볼 수 있습니다.",
-      "매장 구성과 입지 선택이 유통 전략에서 갖는 의미를 점검할 수 있습니다.",
-    );
-  }
-  if (/소재|기능성|냉감|방수|크링클|tpu|브라|스윔웨어|아웃도어|스포츠|여름|장마/i.test(text)) {
-    contextBullets.push(
-      "기능성 소재와 계절성 상품의 소비 반응을 확인할 수 있습니다.",
-      "날씨 변화에 맞춘 상품 기획 방향과 착용 편의성이 함께 부각됩니다.",
-      "여름 상품군에서 소재 차별화가 구매 선택에 미치는 영향을 보여줍니다.",
-    );
-  }
-  if (/ip|캐릭터|협업|애니메이션|콘텐츠|콜라보|미니언즈|몬스터즈/i.test(text)) {
-    contextBullets.push(
-      "캐릭터와 콘텐츠 IP가 패션 상품의 차별화 요소로 확장되고 있습니다.",
-      "협업 상품이 신규 고객 유입과 브랜드 화제성을 만드는 방식이 드러납니다.",
-    );
-  }
-
-  const bullets = [...parts, ...titleSpecificBullets(item), ...contextBullets];
-  return [...new Set(bullets)]
-    .map((bullet) => qualityBullet(bullet, ""))
+  return [...new Set([
+    ...sentenceParts(item.description || ""),
+    ...sentenceParts(item.bodyText || ""),
+    ...sentenceParts(item.summary || ""),
+  ])]
+    .map((part) => qualityBullet(part, ""))
     .filter(Boolean)
     .slice(0, 3);
 }
@@ -564,6 +443,7 @@ function summaryBulletKey(value = "") {
 
 function isGenericSummaryBullet(value = "") {
   const text = cleanSummaryText(value);
+  if (/이슈는 기사에서 확인된 변화가|흐름은 브랜드 운영 방식과 채널 전략|관련 변화는 시즌 수요, 상품 구성|브랜드 스토리와 콘텐츠 자산을 상품 경험으로|관련 소재·기능성 이슈는 상품 차별화|계절 수요와 기능성 소재가 결합될 때/.test(text)) return true;
   return /관련 흐름이 오늘 주요 기사|관련 변화는 상품, 채널|관련 유통 변화|단순 소식보다 매출 구조|단기 화제성보다 실제 판매와 고객 반응|브랜드 운영과 상품 기획|브랜드 운영과 상품·유통 전략|브랜드 운영과 유통 전략|유통 채널과 소비 흐름|상품 기획과 채널 운영 관점|상품 기획, 고객 접점, 채널 운영|고객 수요와 시즌 대응|참고할 만한 업계 신호|참고할 만한 업계 흐름|참고 신호|참고할 만한 소식입니다|매장 체류 경험과 온라인 접점의 조합|온라인과 오프라인 접점의 역할|고객 접점 확대가 실제 매출 효율|지역 상권과 오프라인 소비 흐름|브랜드의 성장성과 수익 구조|실적 개선이 일회성 성과인지|상품 기획과 유통 운영|고객 수요 변화에 맞춘 브랜드 대응/.test(text);
 }
 
@@ -582,7 +462,7 @@ function normalizeSummaryBullets(article, usedSummaryBullets = new Set()) {
   const rawBullets = Array.isArray(article.summaryBullets) ? article.summaryBullets : [];
   const cleaned = [...rawBullets, ...fallbackSummaryBullets(article)]
     .map((bullet) => qualityBullet(bullet, ""))
-    .filter((bullet) => bullet && !isGenericSummaryBullet(bullet) && !looksTruncated(bullet));
+    .filter(Boolean);
   const selected = [];
   const usedLocalSubjects = new Set();
   for (const bullet of cleaned) {
@@ -595,38 +475,7 @@ function normalizeSummaryBullets(article, usedSummaryBullets = new Set()) {
     if (subjectKey) usedLocalSubjects.add(subjectKey);
     if (selected.length >= 3) break;
   }
-  if (selected.length < 3) {
-    const subject = titleSubject(article.title || "해당 기사");
-    const rescueBullets = [
-      ...titleSpecificBullets(article),
-      `${subject} 이슈는 기사에서 확인된 변화가 상품 기획과 고객 접점에 어떻게 연결되는지 보게 합니다.`,
-      `${subject} 흐름은 브랜드 운영 방식과 채널 전략을 함께 점검하게 하는 사례입니다.`,
-      `${subject} 관련 변화는 시즌 수요, 상품 구성, 고객 반응을 함께 살펴볼 필요가 있습니다.`,
-      `${subject} 사례는 브랜드가 어떤 고객층과 접점을 넓히려 하는지 확인하게 합니다.`,
-    ];
-    for (const bullet of rescueBullets) {
-      const cleanedBullet = cleanSummaryText(bullet);
-      const key = summaryBulletKey(cleanedBullet);
-      if (!cleanedBullet || !key || selected.includes(cleanedBullet) || usedSummaryBullets.has(key)) continue;
-      if (isGenericSummaryBullet(cleanedBullet)) continue;
-      selected.push(cleanedBullet);
-      usedSummaryBullets.add(key);
-      if (selected.length >= 3) break;
-    }
-  }
-  if (selected.length < 3) {
-    const subject = titleSubject(article.title || "해당 기사");
-    const safeFallbacks = [
-      `${subject} 이슈는 상품 구성과 고객 접점 변화를 함께 살펴볼 필요가 있습니다.`,
-      `${subject} 관련 내용은 브랜드 운영과 유통 전략에 영향을 줄 수 있습니다.`,
-      `${subject} 흐름은 후속 판매 반응과 채널 확장 여부를 확인해야 합니다.`,
-    ];
-    for (const fallback of safeFallbacks) {
-      if (selected.length >= 3) break;
-      if (!selected.includes(fallback)) selected.push(fallback);
-    }
-  }
-  return selected.slice(0, 3);
+  return selected;
 }
 
 function articleKey(value = "") {
@@ -800,8 +649,14 @@ function bestTitle(...values) {
 }
 
 function compactArticleTitle(value = "") {
-  const title = publicTitle(value).replace(/^\[(종합|단독|기획|특집)\]\s*/, "");
+  const title = publicTitle(value).replace(/^\[(종합|단독|기획|특집|리뷰)\]\s*/, "");
+  const seasonalHeading = title.split(/!\s+|\?\s+/).find((part) =>
+    part.length <= 48 && /20\d{2}\s*(?:S\/?S|F\/?W)/i.test(part) && /컬렉션/.test(part),
+  );
+  if (seasonalHeading) return seasonalHeading.trim();
   if (title.length <= 48) return title;
+  const collectionHeading = title.match(/^(.+?컬렉션)(?:\s|$)/);
+  if (collectionHeading && collectionHeading[1].length <= 48) return collectionHeading[1];
   const keywordHeading = title.match(/^(.+?트렌드\s*키워드\s*\d+)(?:\s|$)/);
   if (keywordHeading && keywordHeading[1].length <= 48) return keywordHeading[1];
   const heading = title.split(/!\s+|\?\s+|…|\.{3}|\s+[|｜]\s+/)[0].trim();
@@ -1004,6 +859,8 @@ function metaContent(html, names) {
 }
 
 function pageTitle(html) {
+  const headline = metaContent(html, ["og:title", "twitter:title"]);
+  if (headline) return publicTitle(headline);
   return bestTitle(
     stripTags((html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || ""),
     metaContent(html, ["og:title", "twitter:title"]) ||
@@ -1013,6 +870,23 @@ function pageTitle(html) {
 
 function pageDescription(html) {
   return metaContent(html, ["description", "og:description", "twitter:description"]);
+}
+
+function pageBodyText(html) {
+  const start = html.search(/<div\b[^>]*(?:class=["']view_body["']|id=["']article-view-content-div["'])[^>]*>/i);
+  if (start < 0) return "";
+  const body = html.slice(start).split(/패션엔\s*[가-힣]{2,6}\s*기자|저작권자/)[0];
+  const paragraphs = [...body.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((match) => cleanSummaryText(match[1]))
+    .filter((text) => text && !/^↑|^사진\s*=/.test(text));
+  const selected = [];
+  let length = 0;
+  for (const paragraph of paragraphs) {
+    if (length + paragraph.length > 4000) break;
+    selected.push(paragraph);
+    length += paragraph.length;
+  }
+  return selected.join(" ");
 }
 
 function pagePublishedAt(html) {
@@ -1065,11 +939,12 @@ async function fetchArticleDetails(link, source) {
   try {
     const { html, url } = await fetchHtml(link.url);
     return {
-      title: bestTitle(pageTitle(html), link.text),
+      title: pageTitle(html) || publicTitle(link.text),
       url,
       publishedAt: pagePublishedAt(html),
       source,
       description: pageDescription(html),
+      bodyText: pageBodyText(html),
       imageUrl: pageImage(html, url),
       sourceType: "direct",
     };
@@ -1281,7 +1156,7 @@ const articleContext = candidates
     (item, index) =>
       `[${index + 1}] 제목: ${item.title}\n출처: ${item.source}\n수집방식: ${item.sourceType || "unknown"}\n대표이미지: ${
         item.imageUrl ? "있음" : "없음"
-      }\n발행: ${item.publishedAt}\n요약후보: ${cleanSummaryText(item.description).slice(0, 360)}\n링크: ${item.url}`,
+      }\n발행: ${item.publishedAt}\n요약후보: ${cleanSummaryText(item.description).slice(0, 360)}\n본문: ${sentenceParts(item.bodyText || "").slice(0, 8).join(" ")}\n링크: ${item.url}`,
   )
   .join("\n\n");
 
@@ -1322,7 +1197,9 @@ leadHeadline에서 조사가 어색해질 수 있는 "소재과", "소재을", "
 개별 브랜드가 특정 매장에 입점했다는 내용만 있는 후보는 중요도가 매우 높지 않으면 선택하지 마라.
 기사에 없는 사실이나 숫자를 만들지 마라. 제목과 출처 정보만으로 확신할 수 없는 내용은 단정하지 마라.
 각 기사에는 본문을 길게 붙이지 말고, 핵심 내용만 3개의 짧은 bullet로 요약하라.
-summaryBullets는 반드시 3개를 작성하라.
+summaryBullets는 원문에 근거한 서로 다른 사실 3개를 우선 작성하라. 사실이 부족하면 다른 정보가 충분한 기사를 선택하라.
+확인할 사실이 1~2개뿐이면 그 사실만 요약하고 일반적인 업계 설명이나 추측으로 세 줄을 채우지 마라.
+컬렉션·런웨이 리뷰는 하루 최대 1개만 선택하고 남은 자리는 실적·유통·소재·정책 등 다른 산업 정보로 채워라.
 summaryBullets는 각 항목 100자 이하의 완결된 한국어 문장으로 작성하라.
 summaryBullets는 문장 중간에서 끊기면 안 된다. 확실하지 않으면 짧은 완결문으로 다시 써라.
 summaryBullets는 앞 단어가 잘린 "시 콘텐츠로", "만 기업", "고 답한", "으로 이동" 같은 문장 조각으로 시작하면 안 된다.
@@ -1805,8 +1682,10 @@ function isOverusedLeadHeadline(title = "") {
 
 function toBriefingArticle(item) {
   const summaryBullets = normalizeSummaryBullets(item);
+  if (!summaryBullets.length) return null;
   return {
-    title: publicTitle(item.title),
+    title: compactArticleTitle(item.title),
+    bodyText: item.bodyText || "",
     summary: summaryBullets[0],
     summaryBullets,
     impact: fallbackImpact(item),
@@ -1871,6 +1750,7 @@ function normalizeModelArticle(article) {
     summaryBullets: article.summaryBullets,
     summary: normalizedArticle.summary,
   });
+  if (!normalizedArticle.summaryBullets.length) return null;
   normalizedArticle.summary = normalizedArticle.summaryBullets[0] || normalizedArticle.summary;
   normalizedArticle.impact = qualityBullet(normalizedArticle.impact, fallbackImpact(base));
   return normalizedArticle;
@@ -1883,6 +1763,14 @@ function safeNormalizeModelArticle(article) {
     console.warn("Skipping selected article that failed quality gate: " + (article.title || "untitled") + ". " + error.message);
     return null;
   }
+}
+
+function isCollectionReview(article = {}) {
+  const title = article.title || "";
+  return /컬렉션|collection/i.test(title) && (
+    /\[리뷰\]|런웨이|패션위크/.test(title)
+    || /[?&]table=1028(?:&|$)/.test(article.url || "")
+  );
 }
 
 function normalizeBriefingArticles(articles) {
@@ -1903,6 +1791,7 @@ function normalizeBriefingArticles(articles) {
   const selectedTokenSets = [];
   let selectedCelebrityFashionCount = 0;
   let selectedBeautyCount = 0;
+  let selectedCollectionReviewCount = 0;
 
   function articlePriority(article) {
     const candidate = candidates.find((item) => sameArticle(item, article)) || article;
@@ -1916,10 +1805,12 @@ function normalizeBriefingArticles(articles) {
     const tokens = titleTokens(article.title);
     const isCelebrity = isCelebrityFashionArticle(article);
     const isBeauty = isBeautyArticle(article);
+    const isReview = isCollectionReview(article);
     const beautyLimit = options.allowSecondBeauty ? 2 : 1;
     if (!article.title || !article.url || !key) return;
     if (isCelebrity && selectedCelebrityFashionCount >= 1) return;
     if (isBeauty && selectedBeautyCount >= beautyLimit) return;
+    if (isReview && selectedCollectionReviewCount >= 1) return;
     if (previousKeys.has(key) || (topic && previousTopicKeys.has(topic))) return;
     if (cluster && previousClusterKeys.has(cluster)) return;
     if (isSimilarTokenSet(tokens, previousTokenSets)) return;
@@ -1935,6 +1826,7 @@ function normalizeBriefingArticles(articles) {
     if (tokens.size) selectedTokenSets.push(tokens);
     if (isCelebrity) selectedCelebrityFashionCount += 1;
     if (isBeauty) selectedBeautyCount += 1;
+    if (isReview) selectedCollectionReviewCount += 1;
   }
 
   normalized
