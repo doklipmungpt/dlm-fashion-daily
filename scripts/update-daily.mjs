@@ -115,9 +115,9 @@ const ARTICLE_LIMIT = 6;
 const LOOKBACK_DAYS = 3;
 
 const queries = [
-  "세정 한성 형지 인동 패션 브랜드",
-  "올포유 웰메이드 올리비아로렌 크로커다일레이디",
-  "폴로 랄프로렌 마시모듀띠 패션 유통",
+  "(세정 OR 한성에프아이 OR 패션그룹형지 OR 인동에프엔) 패션",
+  "(올포유 OR 웰메이드 OR 올리비아로렌 OR 크로커다일레이디 OR 인디안 OR 브렌우드 OR 샤트렌 OR 마담포라) 패션",
+  "(닥스 OR 헤지스 OR 빈폴 OR 폴로랄프로렌 OR 마시모듀띠) 패션",
   "어덜트 캐주얼 패션 브랜드 유통",
   "국내 패션 업계 브랜드 유통",
   "한국 패션 플랫폼 투자 실적",
@@ -1069,6 +1069,24 @@ const cutoff = briefingDate.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 const upperCutoff = briefingDate.getTime() + 24 * 60 * 60 * 1000;
 const seen = new Set();
 
+function businessPriority(item = {}) {
+  if (isBeautyArticle(item) || isCelebrityFashionArticle(item)) return 0;
+  const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
+  const brands = [
+    ...similarBrandKeywords,
+    ...internalCompanyKeywords,
+    ...internalBrandKeywords,
+    ...executiveInterestBrandKeywords,
+    "독립문", "피에이티",
+  ];
+  if (/\bpat\b/i.test(text) || brands.some((keyword) => text.includes(keyword.toLowerCase()))) return 2;
+  return isAdultItem(item) ? 1 : 0;
+}
+
+function compareArticlePriority(a, b) {
+  return businessPriority(b) - businessPriority(a) || priorityScore(b) - priorityScore(a);
+}
+
 function priorityScore(item) {
   const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
   const sourceText = `${item.source || ""} ${item.url || ""}`.toLowerCase();
@@ -1144,7 +1162,7 @@ const candidates = rawItems
     const timestamp = Date.parse(item.publishedAt);
     return !Number.isFinite(timestamp) || (timestamp >= cutoff && timestamp < upperCutoff);
   })
-  .sort((a, b) => priorityScore(b) - priorityScore(a))
+  .sort(compareArticlePriority)
   .slice(0, 24);
 
 if (candidates.length < ARTICLE_LIMIT) {
@@ -1162,6 +1180,8 @@ const articleContext = candidates
 
 const prompt = `
 내부 우선순위: 세정, 한성, 형지, 인동 관련 기사와 올포유, 웰메이드, 올리비아로렌, 크로커다일레이디 관련 기사, 폴로랄프로렌과 마시모듀띠 관련 기사는 우선 검토한다.
+최신성·중복·요약 품질 조건을 통과한 경쟁사·유사 브랜드 기사를 일반 패션 기사보다 먼저 선택하라. 다음은 어덜트·중장년 고객군 기사이며 나머지를 다른 산업 정보로 보완하라.
+이미지가 있거나 해외 유명 브랜드라는 이유로 사업 관련성이 높은 후보를 밀어내지 마라. 적합한 관련 기사가 없는 날에는 오래된 기사나 중복 기사를 억지로 넣지 마라.
 단, 이 내부 우선순위 목록을 공개 제목, 요약, 영향 문구에 기준처럼 나열하지 않는다. 해당 기업명이나 브랜드명은 원문 기사에 실제로 등장하고 기사 맥락상 자연스러울 때만 사용한다.
 오늘 날짜는 ${date}, 한국 시간 기준이다.
 아래는 최근 3일 이내 국내 패션 산업 관련 뉴스 후보이다.
@@ -1551,7 +1571,7 @@ function fallbackBriefing() {
   const picked = candidates
     .filter((item) => item.sourceType === "direct")
     .concat(candidates.filter((item) => item.sourceType !== "direct"))
-    .sort((a, b) => priorityScore(b) - priorityScore(a))
+    .sort(compareArticlePriority)
     .slice(0, ARTICLE_LIMIT);
 
   return {
@@ -1706,7 +1726,7 @@ function safeBriefingArticle(item) {
 }
 
 function isAdultItem(item) {
-  return /(어덜트|adult|4050|5060|중장년)/i.test(`${item.title || ""} ${item.description || ""}`);
+  return /(어덜트|adult|4050|4060|5060|중장년)/i.test(`${item.title || ""} ${item.description || ""}`);
 }
 
 function candidateImageRank(item) {
@@ -1776,13 +1796,6 @@ function isCollectionReview(article = {}) {
 function normalizeBriefingArticles(articles) {
   const normalized = articles.map(safeNormalizeModelArticle).filter(Boolean);
 
-  const adultCandidate = candidates.find(isAdultItem);
-  const alreadyIncluded = adultCandidate && normalized.some((article) => sameArticle(adultCandidate, article));
-  if (adultCandidate && !alreadyIncluded) {
-    const adultArticle = safeBriefingArticle(adultCandidate);
-    if (adultArticle) normalized.unshift(adultArticle);
-  }
-
   const selected = [];
   const selectedUrls = new Set();
   const selectedKeys = new Set();
@@ -1793,9 +1806,10 @@ function normalizeBriefingArticles(articles) {
   let selectedBeautyCount = 0;
   let selectedCollectionReviewCount = 0;
 
-  function articlePriority(article) {
-    const candidate = candidates.find((item) => sameArticle(item, article)) || article;
-    return priorityScore(candidate);
+  function articlePriority(a, b) {
+    const candidateA = candidates.find((item) => sameArticle(item, a)) || a;
+    const candidateB = candidates.find((item) => sameArticle(item, b)) || b;
+    return compareArticlePriority(candidateA, candidateB);
   }
 
   function addArticle(article, options = {}) {
@@ -1829,27 +1843,24 @@ function normalizeBriefingArticles(articles) {
     if (isReview) selectedCollectionReviewCount += 1;
   }
 
-  normalized
-    .sort((a, b) => Number(isBeautyArticle(a)) - Number(isBeautyArticle(b)) || articlePriority(b) - articlePriority(a))
-    .forEach((article) => addArticle(article));
-
-  const sortedCandidates = [...candidates].sort((a, b) => priorityScore(b) - priorityScore(a));
-  sortedCandidates
-    .filter((item) => !isBeautyArticle(item))
-    .forEach((item) => {
-      if (selected.length < ARTICLE_LIMIT) {
-        const article = safeBriefingArticle(item);
-        if (article) addArticle(article);
-      }
+  const sortedCandidates = [...candidates].sort(compareArticlePriority);
+  const remainingArticles = sortedCandidates
+    .filter((item) => !normalized.some((article) => sameArticle(item, article)))
+    .map(safeBriefingArticle)
+    .filter(Boolean);
+  const eligibleArticles = [...normalized, ...remainingArticles].sort(articlePriority);
+  eligibleArticles
+    .filter((article) => !isBeautyArticle(article))
+    .forEach((article) => {
+      if (selected.length < ARTICLE_LIMIT) addArticle(article);
     });
 
   if (selected.length < ARTICLE_LIMIT) {
-    sortedCandidates
+    eligibleArticles
       .filter((item) => isBeautyArticle(item))
       .forEach((item) => {
         if (selected.length < ARTICLE_LIMIT) {
-          const article = safeBriefingArticle(item);
-          if (article) addArticle(article, { allowSecondBeauty: true });
+          addArticle(item, { allowSecondBeauty: true });
         }
       });
   }
@@ -2040,17 +2051,10 @@ for (const article of briefing.articles.slice(0, ARTICLE_LIMIT)) {
 function relevanceSort(a, b) {
   const candidateA = candidates.find((item) => sameArticle(item, a)) || a;
   const candidateB = candidates.find((item) => sameArticle(item, b)) || b;
-  return priorityScore(candidateB) - priorityScore(candidateA);
+  return compareArticlePriority(candidateA, candidateB);
 }
 
-const withImages = enrichedDraft
-  .filter((article) => isUsableArticleImage(article.image))
-  .sort(relevanceSort);
-const withoutImages = enrichedDraft
-  .filter((article) => !isUsableArticleImage(article.image))
-  .sort(relevanceSort);
-const imageLead = withImages.slice(0, 3);
-const relevanceRest = [...withImages.slice(3), ...withoutImages].sort(relevanceSort);
+const orderedDraft = [...enrichedDraft].sort(relevanceSort);
 const usedImpacts = new Set();
 function moveBeautyAwayFromLead(articles = []) {
   const ordered = [...articles];
@@ -2062,7 +2066,7 @@ function moveBeautyAwayFromLead(articles = []) {
   return ordered;
 }
 
-const enrichedArticles = moveBeautyAwayFromLead([...imageLead, ...relevanceRest])
+const enrichedArticles = moveBeautyAwayFromLead(orderedDraft)
   .slice(0, ARTICLE_LIMIT)
   .map((article) => ({
   ...article,

@@ -6,14 +6,17 @@ import vm from "node:vm";
 const source = fs.readFileSync(new URL("./update-daily.mjs", import.meta.url), "utf8");
 const context = vm.createContext({ beautyKeywords: [] });
 function block(start, end) {
-  return source.slice(source.indexOf(start), source.indexOf(end));
+  const begin = source.indexOf(start);
+  return source.slice(begin, source.indexOf(end, begin));
 }
 vm.runInContext(
-  block("const sourceTailPattern =", "function articleKey(")
+  block("const queries =", "const sourceTailPattern =")
+    + block("const sourceTailPattern =", "function articleKey(")
     + block("const similarityStopwords =", "function getTag(")
     + block("function metaContent(", "function pagePublishedAt(")
     + block("function articleKey(", "function clusterTitleKey(")
     + block("function toBriefingArticle(", "function safeBriefingArticle(")
+    + block("function businessPriority(", "const candidates =")
     + block("function isCollectionReview(", "async function chooseArticleImage("),
   context,
 );
