@@ -27,6 +27,7 @@
 - 원문 제목 우선 수집과 대체 경로의 제목 압축을 함께 수정했습니다. 패션엔과 한국섬유신문의 확인된 본문 영역을 읽어 모델과 대체 요약에 전달하며, 본문을 확인하지 못하면 설명에서 확보한 사실만 사용합니다.
 - 오늘 스텔라 리뷰는 해양 모티프·재활용 팬츠·재활용 플라스틱 가방에 관한 원문 사실 세 개로 다시 작성했습니다. 디올 리뷰는 한국섬유신문 idxno=149113의 K2·아이더 경량 하이킹화와 신발 매출 기사로 교체했습니다. 원문 이미지의 HTTP 200과 이미지 형식도 확인했습니다.
 - node scripts/test-article-quality.mjs --live, node scripts/test-article-titles.mjs, node --check scripts/update-daily.mjs, git -c core.whitespace=cr-at-eol diff --check를 모두 통과했습니다.
+- 76a2432 푸시 후 Cloudflare 실제 배포를 확인했습니다. 오늘 상세 페이지와 메인 데이터가 HTTP 200이며 K2·아이더 교체 제목과 스텔라 압축 제목이 모두 반영됐습니다. 잘린 바다 요약은 없고 컬렉션 카드가 한 건입니다. 아카이브는 83개로 유지됐습니다.
 - node scripts/test-article-titles.mjs에서 간결한 생성 제목 우선 선택, 긴 원문 대체, 키워드 나열 제거, 소수점 보존, 출처 제거, 빈 제목 및 안전한 경계가 없는 제목을 검사했습니다. 오늘 메인 데이터와 상세 페이지의 6개 제목도 일치하고 모두 48자 이하였습니다.
 - node --check scripts/update-daily.mjs와 git -c core.whitespace=cr-at-eol diff --check를 통과했습니다. 기존 Windows 줄바꿈을 유지했습니다.
 - GitHub push는 github.com:443에 로컬 프록시 127.0.0.1을 통해 연결하지 못해 실패했습니다. 인증 오류가 아니라 네트워크 오류이며 원격과 Cloudflare 배포에는 아직 반영되지 않았습니다.
