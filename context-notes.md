@@ -32,6 +32,7 @@
 - 후보 24개 압축, 모델·대체 후보 통합 선정, 카드 정렬과 모델 실패 시 대체 생성에 같은 비교 기준을 적용했습니다. 같은 관련도에서는 기존 이미지·매체·발행일 점수를 사용합니다.
 - node scripts/test-business-priority.mjs --audit --live, node scripts/test-article-quality.mjs, node scripts/test-article-titles.mjs, node --check scripts/update-daily.mjs, git -c core.whitespace=cr-at-eol diff --check를 통과했습니다. 모델이 누락한 유효한 경쟁사 후보 복원, 중복·품질 실패 제외와 관련 기사 부재 시 일반 기사 보충을 검증했습니다.
 - 이번 수정은 다음 자동 생성부터 적용하며 오늘과 과거의 게시 기사 데이터를 다시 생성하지 않았습니다.
+- 037e2e5 커밋을 main에 푸시했고 git ls-remote와 실제 원격 생성 코드에서 새 우선순위·통합 후보 선정·검색 조건·카드 정렬을 확인했습니다. 공개 사이트의 아카이브는 83개, 최신 날짜는 2026-10-06으로 유지됐습니다.
 - 원문 제목 우선 수집과 대체 경로의 제목 압축을 함께 수정했습니다. 패션엔과 한국섬유신문의 확인된 본문 영역을 읽어 모델과 대체 요약에 전달하며, 본문을 확인하지 못하면 설명에서 확보한 사실만 사용합니다.
 - 오늘 스텔라 리뷰는 해양 모티프·재활용 팬츠·재활용 플라스틱 가방에 관한 원문 사실 세 개로 다시 작성했습니다. 디올 리뷰는 한국섬유신문 idxno=149113의 K2·아이더 경량 하이킹화와 신발 매출 기사로 교체했습니다. 원문 이미지의 HTTP 200과 이미지 형식도 확인했습니다.
 - node scripts/test-article-quality.mjs --live, node scripts/test-article-titles.mjs, node --check scripts/update-daily.mjs, git -c core.whitespace=cr-at-eol diff --check를 모두 통과했습니다.
