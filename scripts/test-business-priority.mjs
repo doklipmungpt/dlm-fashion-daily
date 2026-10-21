@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { briefingProblems } from "./briefing-validation.mjs";
 
 const source = fs.readFileSync(new URL("./update-daily.mjs", import.meta.url), "utf8");
 function block(start, end) {
@@ -12,6 +13,7 @@ function block(start, end) {
   return source.slice(begin, finish);
 }
 const context = vm.createContext({
+  briefingProblems, URL,
   TIME_ZONE: "Asia/Seoul", date: "2026-10-06", preferredArticleDate: "2026-10-05",
 });
 vm.runInContext(
@@ -21,7 +23,7 @@ vm.runInContext(
     + block("function isLowResolutionImage(", "function imageQualityScore(")
     + block("function kstDateString(", "const preferredDateValue =")
     + block("function isAdultItem(", "function candidateImageRank(")
-    + block("function businessPriority(", "const candidates =")
+    + block("function isFashionRelevant(", "const candidates =")
     + block("function articleKey(", "function clusterTitleKey(")
     + block("function isCollectionReview(", "async function chooseArticleImage(")
     + block("function relevanceSort(", "const orderedDraft ="),
@@ -31,6 +33,7 @@ const competitor = {
   title: "올포유, 가을 상품 판매 전략 강화", description: "한성에프아이의 가두점 판매 전략을 소개한다.",
   url: "https://example.com/competitor", source: "어패럴뉴스", sourceType: "google-news",
   publishedAt: "2026-10-04T09:00:00+09:00",
+  summaryBullets: ["올포유는 가을 상품과 가두점 판매 전략을 새롭게 정비했습니다."],
 };
 const general = {
   title: "해외 패션 시장의 새 기술과 소비 트렌드", url: "https://example.com/general", source: "한국섬유신문",
@@ -54,7 +57,9 @@ assert.ok(context.compareArticlePriority(imageCompetitor, competitor) < 0);
 
 const generalArticles = [
   "웨어러블 기술 개발", "물류 플랫폼 투자", "의류 원단 생산", "백화점 고객 동향", "해외 전시회 개최", "수출 정책 변경",
-].map((title, i) => ({ ...general, title, url: "https://example.com/" + i }));
+].map((title, i) => ({ ...general, title, url: "https://example.com/" + i,
+  summaryBullets: [title + "에 관한 실제 산업 현장의 변화가 확인됐습니다."],
+}));
 Object.assign(context, {
   candidates: [competitor, ...generalArticles],
   safeNormalizeModelArticle: (article) => article,

@@ -1,5 +1,6 @@
 ﻿﻿import fs from "node:fs/promises";
 import path from "node:path";
+import { briefingProblems, publishedBriefingProblems } from "./briefing-validation.mjs";
 
 const ROOT = process.cwd();
 const TIME_ZONE = "Asia/Seoul";
@@ -9,10 +10,6 @@ const API_VERSION = "2026-03-10";
 const FORCE_REGENERATE = /^(1|true|yes)$/i.test(process.env.FORCE_REGENERATE || "");
 const REQUEST_TIMEOUT_MS = 12000;
 const ARTICLE_FETCH_CONCURRENCY = 6;
-
-if (!TOKEN) {
-  throw new Error("GITHUB_TOKEN is required.");
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -112,7 +109,6 @@ const preferredDateValue = new Date(`${date}T00:00:00+09:00`);
 preferredDateValue.setDate(preferredDateValue.getDate() - 1);
 const preferredArticleDate = kstDateString(preferredDateValue);
 const ARTICLE_LIMIT = 6;
-const LOOKBACK_DAYS = 3;
 
 const queries = [
   "(세정 OR 한성에프아이 OR 패션그룹형지 OR 인동에프엔) 패션",
@@ -317,7 +313,7 @@ function cleanArticleTitle(value = "") {
 function publicTitle(value = "") {
   return cleanArticleTitle(value)
     .replace(/^(어패럴뉴스|한국섬유신문|패션비즈|패션엔|패션포스트|Fashion Insight|firstVIEWKorea)\s*[-–—|:：]\s*/i, "")
-    .replace(/^(독립문|PAT|피에이티)\s*(관점|유사|관련)?\s*[-–—|:：,]?\s*/i, "")
+    .replace(/^(독립문|PAT|피에이티)\s*(관점|유사|관련)\s*[-–—|:：,]?\s*/i, "")
     .replace(/^(PAT\s*유사|피에이티\s*유사)\s*/i, "")
     .replace(/^(어덜트\s*캐주얼|중장년\s*캐주얼|유사\s*브랜드)\s*[-–—|:：,]?\s*/i, "")
     .replace(/\s*[-–—|:：]\s*(firstviewkorea|fashion insight|hypebeast|무신사\s*뉴스룸|어패럴뉴스|패션비즈|패션엔|패션포스트|한국섬유신문|chosunbiz|조선비즈)\s*$/i, "")
@@ -329,6 +325,7 @@ function publicTitle(value = "") {
 }
 
 function isCelebrityFashionArticle(item = {}) {
+  if (/fashionn\.com\/board\/read_new\.php\?[^#]*\btable=1024(?:&|$)/i.test(item.url || "")) return true;
   const text = `${item.title || ""} ${item.description || ""} ${item.summary || ""} ${(item.summaryBullets || []).join(" ")}`.toLowerCase();
   return /(\[?패션엔\s*포토\]?|포토\]|공항패션|출근길|시사회룩|제작보고회|공항룩|사복패션|셀럽|연예인|배우|가수|아이돌|걸그룹|보이그룹|아이유|공효진|박소담|이연|기은세|차정원|제니|장원영|정국|세븐틴|르세라핌)/i.test(text);
 }
@@ -349,10 +346,11 @@ function cleanSummaryText(value = "") {
     .replace(/\[[^\]]*(기자|뉴스|신문)[^\]]*\]\s*/g, "")
     .replace(/\s*[-–—|:：]\s*(어패럴뉴스|한국섬유신문|패션비즈|패션인사이트|이투데이|매일경제|한국경제|서울경제|헤럴드경제|파이낸셜뉴스|뉴시스|뉴스1|조선비즈|머니투데이|아시아경제|문화일보|연합뉴스|테넌트뉴스|tenant\s*news|ktnews|뉴스|신문)\s*$/i, "")
     .replace(/\s*[-|]\s*[a-z0-9.-]+\.(com|co\.kr|kr|net|org)\s*$/i, "")
-    .replace(/^(독립문|PAT|피에이티)\s*(관점|유사|관련)?\s*[-–—|:：,]?\s*/i, "")
+    .replace(/^(독립문|PAT|피에이티)\s*(관점|유사|관련)\s*[-–—|:：,]?\s*/i, "")
     .replace(/^(어덜트\s*캐주얼|중장년\s*캐주얼|유사\s*브랜드)\s*[-–—|:：,]?\s*/i, "")
     .replace(/\s*[-–—|:：]\s*(firstviewkorea|fashion insight|hypebeast|무신사\s*뉴스룸|어패럴뉴스|패션비즈|패션엔|패션포스트|한국섬유신문|chosunbiz|조선비즈)\s*$/i, "")
     .replace(/\s+/g, " ")
+    .replace(/([가-힣])\s+(은|는|이|가|을|를|의)(?=\s)/g, "$1$2")
     .trim());
 }
 
@@ -371,7 +369,7 @@ function sentenceParts(value = "") {
   return [...new Intl.Segmenter("ko", { granularity: "sentence" }).segment(cleaned)]
     .map(({ segment }) => segment.replace(/^[·•\-\s]+/, "").trim())
     .filter((item) => item.length >= 8)
-    .slice(0, 12);
+    .slice(0, 40);
 }
 
 function conciseBullet(value = "", fallback = "") {
@@ -393,6 +391,7 @@ function isCompleteKoreanSentence(value = "") {
 function looksTruncated(value = "") {
   const cleaned = cleanSummaryText(value);
   if (!cleaned) return true;
+  if (/(?:의은|의는|은은|는는|을를|를을|가은)\s/.test(cleaned)) return true;
   if (/\.{2,}|…|\.{3}$/.test(cleaned)) return true;
   if (/[,·ㆍ:;-–—]$/.test(cleaned)) return true;
   if (/^(시|만|고|며|서|서도|에도|에서|으로|로|과|와|은|는|이|가|을|를|의|도|또|및)\s+/.test(cleaned)) return true;
@@ -425,14 +424,28 @@ function titleSubject(value = "") {
 }
 
 function fallbackSummaryBullets(item) {
-  return [...new Set([
+  const sentences = [...new Set([
     ...sentenceParts(item.description || ""),
     ...sentenceParts(item.bodyText || ""),
     ...sentenceParts(item.summary || ""),
-  ])]
-    .map((part) => qualityBullet(part, ""))
-    .filter(Boolean)
-    .slice(0, 3);
+  ])].map((part) => qualityBullet(part, "")).filter(Boolean);
+  const tokens = titleTokens(item.title || "");
+  const titleNumbers = new Set((item.title || "").match(/\d+(?:[.,]\d+)?/g) || []);
+  const ranked = sentences.map((text, index) => ({
+    text, index,
+    score: [...tokens].filter((token) => text.toLowerCase().includes(token)).length * 3
+      + (text.match(/\d+(?:[.,]\d+)?/g) || []).filter((number) => titleNumbers.has(number)).length * 8
+      + (text.match(/\d+(?:[.,]\d+)?(?:%|억|조|명|개|배|곳)/g) || []).length * 2
+      + (/매출|전년|수익|판매|계약|출시|생산|도입|수출|운영|출점/.test(text) ? 3 : 0)
+      - (/분명|아이러니|그런데|잘 모르|작지만 강하다/.test(text) ? 8 : 0),
+  })).sort((a, b) => b.score - a.score || a.index - b.index);
+  const selected = [];
+  for (const { text } of ranked) {
+    if (selected.some((part) => part.includes(text) || text.includes(part))) continue;
+    selected.push(text);
+    if (selected.length === 3) break;
+  }
+  return selected;
 }
 
 function summaryBulletKey(value = "") {
@@ -681,7 +694,9 @@ function getAttribute(block, attribute) {
 
 function absolutizeUrl(url, baseUrl) {
   try {
-    return new URL(url, baseUrl).toString();
+    const absolute = new URL(url, baseUrl);
+    if (absolute.protocol === "http:" && /(^|\.)(apparelnews\.co\.kr|ktnews\.com|fashionn\.com)$/i.test(absolute.hostname)) absolute.protocol = "https:";
+    return absolute.toString();
   } catch {
     return "";
   }
@@ -811,7 +826,7 @@ async function fetchHtml(url) {
     redirect: "follow",
     headers: {
       "User-Agent":
-        "Mozilla/5.0 (compatible; FashionDailyArchive/1.0; +https://github.com/pse7077/fashion-daily-archive)",
+        "Mozilla/5.0 (compatible; FashionDailyArchive/1.0; +https://github.com/doklipmungpt/dlm-fashion-daily)",
       Accept: "text/html,application/xhtml+xml",
     },
   });
@@ -845,15 +860,11 @@ function extractLinks(html, baseUrl, patterns) {
 }
 
 function metaContent(html, names) {
-  for (const name of names) {
-    const patterns = [
-      new RegExp(`<meta\\b[^>]*(?:property|name|itemprop)=["']${name}["'][^>]*content=["']([^"']+)["'][^>]*>`, "i"),
-      new RegExp(`<meta\\b[^>]*content=["']([^"']+)["'][^>]*(?:property|name|itemprop)=["']${name}["'][^>]*>`, "i"),
-    ];
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      if (match?.[1]) return decodeXml(match[1]).trim();
-    }
+  for (const tag of html.match(/<meta\b[^>]*>/gi) || []) {
+    const attributes = Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*(["'])([\s\S]*?)\2/g)]
+      .map((match) => [match[1].toLowerCase(), decodeXml(match[3]).trim()]));
+    const name = attributes.property || attributes.name || attributes.itemprop;
+    if (names.includes(name) && attributes.content) return attributes.content;
   }
   return "";
 }
@@ -872,17 +883,21 @@ function pageDescription(html) {
   return metaContent(html, ["description", "og:description", "twitter:description"]);
 }
 
-function pageBodyText(html) {
-  const start = html.search(/<div\b[^>]*(?:class=["']view_body["']|id=["']article-view-content-div["'])[^>]*>/i);
+function articleBodyHtml(html) {
+  const start = html.search(/<(?:div|article)\b[^>]*(?:class=["'][^"']*\b(?:view_body|news_con)\b|id=["']article-view-content-div["'])[^>]*>/i);
   if (start < 0) return "";
-  const body = html.slice(start).split(/패션엔\s*[가-힣]{2,6}\s*기자|저작권자/)[0];
-  const paragraphs = [...body.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
+  return html.slice(start).split(/패션엔\s*[가-힣]{2,6}\s*기자|저작권자|<!--\s*본문\s*끝/)[0]
+    .replace(/<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>/gi, "");
+}
+
+function pageBodyText(html) {
+  const paragraphs = [...articleBodyHtml(html).matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
     .map((match) => cleanSummaryText(match[1]))
-    .filter((text) => text && !/^↑|^사진\s*=/.test(text));
+    .filter((text) => text && isCompleteKoreanSentence(text) && !/^↑|^사진\s*=|^자료\s*[:=]/.test(text));
   const selected = [];
   let length = 0;
   for (const paragraph of paragraphs) {
-    if (length + paragraph.length > 4000) break;
+    if (length + paragraph.length > 6500) break;
     selected.push(paragraph);
     length += paragraph.length;
   }
@@ -890,13 +905,12 @@ function pageBodyText(html) {
 }
 
 function pagePublishedAt(html) {
-  return metaContent(html, [
-    "article:published_time",
-    "article:modified_time",
-    "date",
-    "pubdate",
-    "publishdate",
-  ]);
+  const metadata = metaContent(html, ["article:published_time", "date", "pubdate", "publishdate"]);
+  if (metadata && Number.isFinite(Date.parse(metadata))) return metadata;
+  const koreanDate = html.match(/(?:발행|승인)\s*(\d{4})[.년/-]\s*(\d{1,2})[.월/-]\s*(\d{1,2})/);
+  const fashionnDate = html.match(/<font\b[^>]*>\s*(20\d{2})-(\d{2})-(\d{2})\s*<\/font>/i);
+  const match = koreanDate || fashionnDate;
+  return match ? match[1] + "-" + match[2].padStart(2, "0") + "-" + match[3].padStart(2, "0") + "T09:00:00+09:00" : "";
 }
 
 function pageImageCandidates(html, baseUrl) {
@@ -912,7 +926,8 @@ function pageImageCandidates(html, baseUrl) {
 
   // Many publishers expose the large original only through srcset. Read the
   // widest candidate first, then retain the smaller versions as fallbacks.
-  for (const match of html.matchAll(/<(?:img|source)\b[^>]*\bsrcset=["']([^"']+)["'][^>]*>/gi)) {
+  const body = articleBodyHtml(html);
+  for (const match of body.matchAll(/<(?:img|source)\b[^>]*\bsrcset=["']([^"']+)["'][^>]*>/gi)) {
     const sources = match[1]
       .split(",")
       .map((part) => {
@@ -924,7 +939,7 @@ function pageImageCandidates(html, baseUrl) {
     sources.forEach((source) => add(source.url));
   }
 
-  for (const match of html.matchAll(/<img\b[^>]*(?:data-original|data-src|src)=["']([^"']+)["'][^>]*>/gi)) {
+  for (const match of body.matchAll(/<img\b[^>]*(?:data-original|data-src|src)=["']([^"']+)["'][^>]*>/gi)) {
     add(match[1]);
   }
   return candidates;
@@ -959,7 +974,8 @@ async function fetchDirectSource({ homeUrl, source, patterns, limit = 12 }) {
     const links = extractLinks(html, homeUrl, patterns).slice(0, limit);
     const articles = await mapLimit(links, ARTICLE_FETCH_CONCURRENCY, (link) => fetchArticleDetails(link, source));
     return articles.filter(Boolean);
-  } catch {
+  } catch (error) {
+    console.warn("Publisher unavailable: " + source + ". " + error.message);
     return [];
   }
 }
@@ -969,23 +985,28 @@ const directSources = [
     homeUrl: "https://www.apparelnews.co.kr/",
     source: "어패럴뉴스",
     patterns: [/apparelnews\.co\.kr\/news\/news_view/i],
-    limit: 36,
+    limit: 60,
   },
   {
     homeUrl: "https://www.ktnews.com/",
     source: "한국섬유신문",
     patterns: [/ktnews\.com\/news\/articleView\.html/i],
-    limit: 36,
+    limit: 60,
   },
   {
     homeUrl: "https://www.fashionn.com/",
     source: "패션엔",
     patterns: [/fashionn\.com\/board\/read_new\.php/i],
-    limit: 36,
+    limit: 60,
   },
 ];
 
 const directItems = await settledFlat(directSources.map(fetchDirectSource));
+console.log("Publisher audit: " + JSON.stringify(directSources.map(({ source }) => ({
+  source,
+  fetched: directItems.filter((item) => item.source === source).length,
+  withBody: directItems.filter((item) => item.source === source && (item.bodyText || "").length >= 120).length,
+}))));
 const preferredPublisherQueries = [
   "firstVIEWKorea 패션",
   "Fashion Insight 패션",
@@ -1008,7 +1029,8 @@ const arrayMatch = issuesSource.match(/window\.FASHION_DAILY_ISSUES\s*=\s*(\[[\s
 if (!arrayMatch) throw new Error("Could not parse data/issues.js");
 const issues = Function(`"use strict"; return (${arrayMatch[1]});`)();
 const existingIssue = issues.find((item) => item.date === date);
-if (existingIssue && !FORCE_REGENERATE) {
+const existingHtml = existingIssue ? await fs.readFile(path.join(ROOT, "issues", date + ".html"), "utf8").catch(() => "") : "";
+if (existingIssue && !FORCE_REGENERATE && publishedBriefingProblems(existingIssue, existingHtml).length === 0) {
   const weeklySignals = await fetchWeeklySignals();
   await fs.writeFile(
     path.join(ROOT, "data", "signals.js"),
@@ -1022,54 +1044,74 @@ if (existingIssue && !FORCE_REGENERATE) {
 async function collectPreviousArticles() {
   const previousUrls = new Set();
   const previousKeys = new Set();
-  const previousTopicKeys = new Set();
-  const previousClusterKeys = new Set();
   const previousTokenSets = [];
-  const previousImages = new Set();
-  const addPreviousTitle = (value) => {
+  const addPreviousTitle = (value, recent) => {
     if (!value) return;
     previousKeys.add(articleKey(value));
-    previousTopicKeys.add(topicKey(value));
-    previousClusterKeys.add(clusterTitleKey(value));
     const tokens = titleTokens(value);
-    if (tokens.size) previousTokenSets.push(tokens);
+    if (recent && tokens.size) previousTokenSets.push(tokens);
   };
   for (const issue of issues.filter((item) => item.date !== date)) {
-    addPreviousTitle(issue.title);
+    const recent = Date.parse(issue.date) >= Date.parse(date) - 7 * 86400000;
     for (const headline of issue.headlines || []) {
-      addPreviousTitle(headline);
+      addPreviousTitle(headline, recent);
     }
-    if (issue.image) previousImages.add(imageKey(issue.image));
     if (!issue.url) continue;
     try {
       const html = await fs.readFile(path.join(ROOT, issue.url), "utf8");
       for (const match of html.matchAll(/<h2>([\s\S]*?)<\/h2>/gi)) {
-        addPreviousTitle(match[1]);
+        addPreviousTitle(match[1], recent);
       }
       for (const match of html.matchAll(/<a\b[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi)) {
-        previousUrls.add(match[1]);
-      }
-      for (const match of html.matchAll(/<img\b[^>]*src=["']([^"']+)["'][^>]*>/gi)) {
-        previousImages.add(imageKey(match[1]));
+        previousUrls.add(canonicalArticleUrl(match[1]));
       }
     } catch {
       // Older archive pages may not exist locally during setup.
     }
   }
   previousKeys.delete("");
-  previousTopicKeys.delete("");
-  previousClusterKeys.delete("");
-  previousImages.delete("");
-  return { previousUrls, previousKeys, previousTopicKeys, previousClusterKeys, previousTokenSets, previousImages };
+  return { previousUrls, previousKeys, previousTokenSets };
 }
 
-const { previousUrls, previousKeys, previousTopicKeys, previousClusterKeys, previousTokenSets, previousImages } = await collectPreviousArticles();
+const { previousUrls, previousKeys, previousTokenSets } = await collectPreviousArticles();
 const rawItems = [...directItems, ...googleItems];
-const cutoff = briefingDate.getTime() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 const upperCutoff = briefingDate.getTime() + 24 * 60 * 60 * 1000;
 const seen = new Set();
 
+function isFashionRelevant(item = {}) {
+  const title = item.title || "";
+  const text = (title + " " + (item.description || "")).toLowerCase();
+  const fashion = /패션|의류|의복|여성복|남성복|셔츠|원단|섬유|어패럴|캐주얼|아웃도어|스포츠웨어|골프웨어|패딩|아우터|니트|코트|신발|백화점|쇼핑|가두점|봉제|텍스타일|착장|컬렉션/i;
+  if (/음원|음방|컴백|뮤지션|솔로 신보|앨범|콘서트|공연|유리기판|세정장비|정밀 세정/.test(title) && !fashion.test(title)) return false;
+  if (/웰메이드코리아/.test(title) && !/패션|의류|세정그룹|인디안/.test(text)) return false;
+  if (fashion.test(text) || /어덜트|구스다운|덕다운|경량 다운|다운 (?:재킷|패딩|판매)/.test(text)) return true;
+  const strongBrands = [...similarBrandKeywords.filter((brand) => brand !== "웰메이드"), ...internalBrandKeywords.filter((brand) => brand !== "웰메이드"), ...executiveInterestBrandKeywords];
+  if (strongBrands.some((brand) => text.includes(brand.toLowerCase())) || /\bpat\b|피에이티/.test(text)) return true;
+  return /명품|럭셔리|면세|쇼핑몰|디자이너|유통망|팝업|섬산련/.test(text);
+}
+
+function canonicalArticleUrl(value = "") {
+  try {
+    const url = new URL(decodeXml(value));
+    url.protocol = "https:";
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_|^(fbclid|gclid|cate|cat|sel_cat)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function isPrimaryWindow(item = {}) {
+  const published = articleDateString(item.publishedAt);
+  return !!published && Date.parse(published) >= Date.parse(date) - 3 * 86400000 && published <= date;
+}
+
 function businessPriority(item = {}) {
+  if (!isFashionRelevant(item)) return 0;
   if (isBeautyArticle(item) || isCelebrityFashionArticle(item)) return 0;
   const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
   const brands = [
@@ -1080,6 +1122,7 @@ function businessPriority(item = {}) {
     "독립문", "피에이티",
   ];
   if (/\bpat\b/i.test(text) || brands.some((keyword) => text.includes(keyword.toLowerCase()))) return 2;
+  if (brands.some((keyword) => (item.bodyText || "").toLowerCase().includes(keyword.toLowerCase()))) return 1;
   return isAdultItem(item) ? 1 : 0;
 }
 
@@ -1136,20 +1179,18 @@ function priorityScore(item) {
   if (isCelebrityFashionArticle(item)) {
     score -= 120;
   }
+  if (/^\[[^\]]+\]|칼럼|기고|사설|살아남는 법/.test(item.title || "") && !/\[(리뷰|종합|단독)\]/.test(item.title || "")) score -= 100;
   return score;
 }
 
 const candidates = rawItems
   .filter((item) => item.title && item.url)
   .map((item) => ({ ...item, title: publicTitle(item.title) }))
+  .filter(isFashionRelevant)
   .filter((item) => {
-    const topic = topicKey(item.title);
-    const cluster = clusterTitleKey(item.title);
     const tokens = titleTokens(item.title);
-    return !previousUrls.has(item.url)
+    return !previousUrls.has(canonicalArticleUrl(item.url))
       && !previousKeys.has(articleKey(item.title))
-      && !(topic && previousTopicKeys.has(topic))
-      && !(cluster && previousClusterKeys.has(cluster))
       && !isSimilarTokenSet(tokens, previousTokenSets);
   })
   .filter((item) => {
@@ -1160,22 +1201,28 @@ const candidates = rawItems
   })
   .filter((item) => {
     const timestamp = Date.parse(item.publishedAt);
-    return !Number.isFinite(timestamp) || (timestamp >= cutoff && timestamp < upperCutoff);
+    return Number.isFinite(timestamp) && timestamp >= briefingDate.getTime() - 7 * 86400000 && timestamp < upperCutoff;
   })
-  .sort(compareArticlePriority)
-  .slice(0, 24);
+  .filter((item) => fallbackSummaryBullets(item).length > 0)
+  .filter((item) => (item.bodyText || "").length >= 120)
+  .sort((a, b) => Number(isPrimaryWindow(b)) - Number(isPrimaryWindow(a)) || compareArticlePriority(a, b))
+  .slice(0, 96);
+
+console.log("Candidate audit: " + JSON.stringify({ raw: rawItems.length, fashion: rawItems.filter(isFashionRelevant).length, eligible: candidates.length, primary: candidates.filter(isPrimaryWindow).length, shortlist: candidates.slice(0, 18).map((item) => ({ title: item.title, priority: businessPriority(item), date: articleDateString(item.publishedAt) })) }));
 
 if (candidates.length < ARTICLE_LIMIT) {
   throw new Error(`Not enough recent articles found: ${candidates.length}`);
 }
 
-const articleContext = candidates
-  .map(
-    (item, index) =>
-      `[${index + 1}] 제목: ${item.title}\n출처: ${item.source}\n수집방식: ${item.sourceType || "unknown"}\n대표이미지: ${
-        item.imageUrl ? "있음" : "없음"
-      }\n발행: ${item.publishedAt}\n요약후보: ${cleanSummaryText(item.description).slice(0, 360)}\n본문: ${sentenceParts(item.bodyText || "").slice(0, 8).join(" ")}\n링크: ${item.url}`,
-  )
+const articleContext = candidates.slice(0, 18)
+  .map((item, index) => [
+    "[" + (index + 1) + "] 제목: " + item.title,
+    "출처: " + item.source + " / 수집방식: " + (item.sourceType || "unknown"),
+    "대표이미지: " + (item.imageUrl ? "있음" : "없음"),
+    "발행: " + item.publishedAt,
+    "원문에서 확인한 사실: " + fallbackSummaryBullets(item).join(" "),
+    "링크: " + item.url,
+  ].join("\n"))
   .join("\n\n");
 
 const prompt = `
@@ -1282,290 +1329,71 @@ function inferCategory(item) {
   return item.sourceType === "direct" ? "브랜드" : "트렌드";
 }
 
+function articleAnalysis(item) {
+  const text = [item.title, item.description, ...(item.summaryBullets || [])].filter(Boolean).join(" ");
+  if (/프리미엄/.test(text) && /여성/.test(text)) return {
+    impact: "기존 브랜드의 파생 라인을 독립적으로 키울 때는 프리미엄 가격 수용도와 여성 고객 확대가 매출에 각각 얼마나 기여하는지 점검해야 합니다.",
+    watchPoint: "프리미엄 여성 라인의 가격대와 유통 채널이 기존 브랜드와 어떻게 구분되는지, 매출 목표와 실제 판매를 함께 확인할 필요가 있습니다.",
+  };
+  if (/골프|선수/.test(text) && /니트|베스트|레이어드/.test(text)) return {
+    impact: "선수 착장을 활용한 니트·베스트 제안이 실제 골프웨어 판매로 이어지는지, 보온성과 활동성의 구매 반응을 나눠 볼 필요가 있습니다.",
+    watchPoint: "환절기 골프웨어에서는 단품 판매뿐 아니라 니트·베스트의 동반 구매와 기온 변화에 따른 품목별 판매 속도를 살펴볼 필요가 있습니다.",
+  };
+  if (/경량|다운/.test(text) && /여성복/.test(text)) return {
+    impact: "여성복 경량 다운은 아웃도어 제품과의 기능 경쟁뿐 아니라 핏·색감·겹쳐 입기 수요에서 차별점을 확인할 필요가 있습니다.",
+    watchPoint: "경량 다운의 수요가 여성복으로 넓어질 때 기존 아우터의 판매 구간이 달라지는지, 두께·가격대별 재고 회전을 비교할 필요가 있습니다.",
+  };
+  if (/디렉터|퇴임|계약 종료/.test(text)) return {
+    impact: "디자인 책임자 교체는 다음 시즌 상품 방향과 기존 고객 유지에 영향을 줄 수 있어, 컬렉션 변화와 매출 회복을 구분해 볼 필요가 있습니다.",
+    watchPoint: "디렉터 교체 이후 새 상품 공개 시점과 핵심 품목의 변화가 실제 고객 반응에 어떻게 연결되는지 확인할 필요가 있습니다.",
+  };
+  if (/아울렛/.test(text) && /할인|행사|축제/.test(text)) return {
+    impact: "대형 아울렛의 추가 할인은 같은 기간 가두점의 가격 경쟁과 재고 소진에 영향을 줄 수 있어, 판매 수량과 마진을 함께 봐야 합니다.",
+    watchPoint: "아울렛 행사 기간에는 경쟁 채널의 할인 폭과 주력 브랜드 구성을 비교해 정상가 판매와 행사 판매의 균형을 점검할 필요가 있습니다.",
+  };
+  if (/팝업/.test(text) && /소호|쇼핑몰|커머스/.test(text)) return {
+    impact: "온라인 쇼핑몰의 오프라인 행사는 방문객 수보다 신규 고객 확보와 행사 후 온라인 재구매로 성과가 이어지는지 확인하는 것이 중요합니다.",
+    watchPoint: "온라인몰의 팝업 운영에서는 참여 브랜드 수와 방문객 반응을 행사 이후 판매·재방문 지표와 연결해 살펴볼 필요가 있습니다.",
+  };
+  const subject = compactArticleTitle(item.title || "");
+  return {
+    impact: subject + " 관련해 보도된 변화가 실제 판매와 수익에 이어지는지 후속 지표를 확인할 필요가 있습니다.",
+    watchPoint: subject + " 관련해 기사에서 제시한 사업 계획과 실제 시행 시점, 후속 성과를 구분해 확인할 필요가 있습니다.",
+  };
+}
+
 function fallbackImpact(item) {
-  const text = `${item.title || ""} ${item.description || ""}`.toLowerCase();
-  if (/(어덜트|4050|5060|중장년|여성복|남성복|캐주얼)/i.test(text)) {
-    return "중장년 고객층의 취향 변화와 상품 기획 방향을 점검할 수 있는 소식입니다.";
-  }
-  if (/(상권|지역|권역|소비권|유동인구|가두점|로드숍)/i.test(text)) {
-    return "지역 상권과 오프라인 소비 흐름이 매장 운영 우선순위에 주는 영향을 확인할 수 있습니다.";
-  }
-  if (/(백화점|아울렛|매장|팝업|유통|플랫폼|판매)/i.test(text)) {
-    return "매장 체류 경험과 온라인 접점의 조합이 고객 유입과 구매 전환에 미치는 영향을 보여줍니다.";
-  }
-  if (/(투자|실적|매출|영업이익|인수|상장)/i.test(text)) {
-    return "브랜드의 성장성과 수익 구조가 실제 운영 체질 개선으로 이어지는지 확인할 수 있습니다.";
-  }
-  if (/(뷰티|화장품|스킨케어|임상|심포지엄|콜라겐|피부)/i.test(text)) {
-    return "기능성 뷰티 제품은 임상 근거와 전문가 접점이 브랜드 신뢰를 만드는 핵심 요소로 커지고 있습니다.";
-  }
-  if (/(ai|인공지능|테크|기술|ip|데이터)/i.test(text)) {
-    return "패션 비즈니스에서 기술 활용과 콘텐츠 자산화가 어떻게 경쟁력으로 이어지는지 보여주는 사례입니다.";
-  }
-  if (/(관세|규제|정부|정책|공급망)/i.test(text)) {
-    return "원가, 생산, 수입 구조에 영향을 줄 수 있어 공급망 리스크 관점에서 확인이 필요한 이슈입니다.";
-  }
-  const subject = titleSubject(item.title || "해당 기사");
-  return `${subject} 흐름은 브랜드 정체성, 고객 접점, 상품 운영 중 어디에 영향을 주는지 점검할 필요가 있습니다.`;
+  return articleAnalysis(item).impact;
 }
 
-function impactCandidates(item) {
-  const text = `${item.title || ""} ${item.summary || ""} ${item.description || ""}`.toLowerCase();
-  const candidates = [];
-
-  if (/(어덜트|4050|5060|중장년|여성복|남성복|캐주얼)/i.test(text)) {
-    candidates.push(
-      "핵심 고객층의 취향 변화와 상품 기획 방향을 함께 점검할 수 있는 소식입니다.",
-      "성숙 고객을 겨냥한 상품력과 브랜드 운영 방식의 변화를 읽을 수 있는 흐름입니다.",
-      "여성복·캐주얼 시장에서 고객 세분화와 상품 차별화가 더 중요해지는 신호입니다.",
-    );
-  }
-  if (/(상권|지역|권역|소비권|유동인구|가두점|로드숍)/i.test(text)) {
-    candidates.push(
-      "지역 상권과 오프라인 소비 흐름을 점검할 때 참고할 만한 유통 신호입니다.",
-      "매장 입지와 고객 유입 구조를 다시 살펴보게 하는 오프라인 유통 흐름입니다.",
-      "권역별 소비 변화가 브랜드의 채널 전략에 어떤 영향을 주는지 볼 만한 사례입니다.",
-    );
-  }
-  if (/(백화점|아울렛|매장|팝업|유통|플랫폼|판매)/i.test(text)) {
-    candidates.push(
-      "매장 체류 경험과 온라인 접점의 조합이 고객 유입과 구매 전환에 미치는 영향을 보여줍니다.",
-      "온라인과 오프라인 접점의 역할을 나눠 보는 데 필요한 채널 운영 사례입니다.",
-      "고객 접점 확대가 실제 매출 효율로 이어지는지 점검해야 하는 유통 변화입니다.",
-    );
-  }
-  if (/(투자|실적|매출|영업이익|인수|상장)/i.test(text)) {
-    candidates.push(
-      "브랜드의 성장성, 수익성, 투자 우선순위를 판단할 때 참고할 만한 재무·사업 신호입니다.",
-      "실적 개선이 일회성 성과인지 지속 가능한 운영 변화인지 함께 살펴볼 필요가 있습니다.",
-      "수익성과 확장성의 균형을 어떻게 만들고 있는지 살펴볼 만한 사업 흐름입니다.",
-    );
-  }
-  if (/(ai|인공지능|테크|기술|ip|데이터)/i.test(text)) {
-    candidates.push(
-      "패션 비즈니스에서 기술 활용과 콘텐츠 자산화가 어떻게 경쟁력으로 이어지는지 보여주는 사례입니다.",
-      "AI와 디지털 도구가 상품 기획, 마케팅, 고객 경험으로 확장되는 흐름입니다.",
-      "기술 활용이 브랜드 표현 방식과 운영 효율을 바꾸는 과정을 확인할 수 있습니다.",
-    );
-  }
-  if (/(관세|규제|정부|정책|공급망|소싱|수출|해외)/i.test(text)) {
-    candidates.push(
-      "원가, 생산, 수입 구조에 영향을 줄 수 있어 공급망 리스크 관점에서 확인이 필요한 이슈입니다.",
-      "해외 시장과 공급망 변수가 브랜드 운영에 미치는 영향을 살펴볼 만한 소식입니다.",
-      "소싱과 수출 환경 변화가 상품 가격과 납기 전략에 미칠 영향을 점검해야 합니다.",
-    );
-  }
-
-  const subject = titleSubject(item.title || "해당 기사");
-  candidates.push(
-    `${subject} 흐름은 브랜드 정체성, 고객 접점, 상품 운영 중 어디에 영향을 주는지 점검할 필요가 있습니다.`,
-    `${subject} 사례는 기사에서 확인된 변화가 브랜드 운영과 채널 전략에 어떻게 연결되는지 보게 합니다.`,
-    `${subject} 이슈는 상품 기획과 채널 운영의 우선순위를 다시 보게 하는 신호입니다.`,
-  );
-
-  return [...new Set(candidates.map(cleanSummaryText).filter(Boolean))];
-}
 
 function uniqueImpactForArticle(article, usedImpacts) {
-  const current = qualityBullet(article.impact, "");
-  const options = [current, ...impactCandidates(article)].filter(
-    (option) => option && !isGenericSummaryBullet(option) && !looksTruncated(option),
-  );
-  for (const option of options) {
-    const key = option.replace(/\s+/g, " ").trim();
-    if (!usedImpacts.has(key)) {
+  for (const value of [article.impact, fallbackImpact(article)]) {
+    const text = cleanSummaryText(value || "");
+    const key = summaryBulletKey(text);
+    if (text && !isGenericSummaryBullet(text) && !looksTruncated(text) && !usedImpacts.has(key)) {
       usedImpacts.add(key);
-      return key;
+      return text;
     }
   }
-  const fallbacks = [
-    "상품 기획과 채널 운영의 균형을 다시 살펴보게 하는 참고 신호입니다.",
-    "고객 수요 변화에 맞춘 시즌 대응 방식을 점검할 수 있는 소식입니다.",
-    "브랜드 경쟁력과 유통 접점의 연결 방식을 함께 볼 만한 내용입니다.",
-    "판매 현장과 상품 전략의 우선순위를 다시 확인하게 하는 흐름입니다.",
-  ];
-  for (const fallback of fallbacks) {
-    if (!usedImpacts.has(fallback)) {
-      usedImpacts.add(fallback);
-      return fallback;
-    }
-  }
-  const fallback = `업계 영향 포인트 ${usedImpacts.size + 1}`;
-  usedImpacts.add(fallback);
+  const fallback = "‘" + compactArticleTitle(article.title) + "’의 후속 성과는 실제 판매·고객 반응과 운영 비용을 나누어 살펴볼 필요가 있습니다.";
+  usedImpacts.add(summaryBulletKey(fallback));
   return fallback;
 }
 
 function fallbackWatchPoints(articles = []) {
-  const text = articles
-    .map((article) => `${article.title || ""} ${article.summary || ""} ${(article.summaryBullets || []).join(" ")} ${article.impact || ""}`)
-    .join(" ")
-    .toLowerCase();
-  const points = [];
-
-  if (/(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐)/i.test(text)) {
-    points.push("기능성 소재와 R&D 강화 흐름은 여름 상품력, 착용감, 차별화 포인트를 다시 점검하게 하는 신호입니다.");
-  }
-  if (/(중장년|어덜트|셔츠|남성복|여성복|캐주얼|국민 셔츠|고객)/i.test(text)) {
-    points.push("중장년 고객이 반복 구매하는 기본 아이템의 힘을 확인하고, 핵심 품목의 핏·소재·가격 설계를 살펴볼 필요가 있습니다.");
-  }
-  if (/(글로벌|수출|해외|소싱|공급망|미국|바이어|전시)/i.test(text)) {
-    points.push("글로벌 소싱과 해외 바이어 접점 확대는 국내 브랜드의 공급망 안정성과 수출 가능성을 함께 볼 만한 대목입니다.");
-  }
-  if (/(럭셔리|성장|시장|소비|매출|판매)/i.test(text)) {
-    points.push("럭셔리 시장의 회복 속도 둔화는 소비 양극화와 가격 저항을 가늠하는 참고 지표로 함께 봐야 합니다.");
-  }
-  if (/(유통|매장|상권|플랫폼|백화점|판매)/i.test(text)) {
-    points.push("판매 채널과 상권 변화는 오프라인 고객 접점의 효율을 점검하고 유통 우선순위를 조정하는 단서가 됩니다.");
-  }
-
-  points.push(
-    "오늘 선정된 기사들은 단발 이슈보다 소재, 고객, 유통 구조가 함께 움직이는지를 확인하는 관점에서 보는 것이 좋습니다.",
-  );
-
-  return [...new Set(points)].slice(0, 3);
+  return articles.slice(0, 3).map((article) => articleAnalysis(article).watchPoint);
 }
 
-function isGenericLeadHeadline(value = "") {
-  return /국내\s*패션\s*업계|국내\s*패션업계|주요\s*뉴스\s*업데이트|확인할\s*만한\s*업계\s*소식|패션\s*전문\s*매체/i.test(
-    value,
-  );
-}
-
-const leadThemeRules = [
-  { label: "스포츠웨어 미디어 경쟁", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
-  { label: "ESG·지역사회 접점", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
-  { label: "해외 유통 확장", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출|직소싱)/i },
-  { label: "뷰티 유통 다변화", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
-  { label: "헤리티지·장인정신", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
-  { label: "기능성 소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐|공급망|소싱)/i },
-  { label: "오프라인 접점", pattern: /(오프라인|팝업|매장|상권|백화점|유통|체험|공간|플래그십)/i },
-  { label: "소비 변화", pattern: /(럭셔리|명품|소비|성장|고객|판매|셔츠|수요|반응)/i },
-  { label: "AI 전환", pattern: /(ai|인공지능|테크|플랫폼|디자인|이커머스|ax)/i },
-  { label: "상품 전략", pattern: /(여성복|남성복|spa|어덜트|중장년|캐주얼|캠페인|컬렉션)/i },
-  { label: "디자이너 컬렉션", pattern: /(서울패션위크|컬렉션|디자이너|런웨이|실루엣|쿠튀르)/i },
-  { label: "기후 대응 상품", pattern: /(폭염|장마|겨울|냉감|발수|자외선|기후|날씨)/i },
-];
-
-function leadThemesFromText(text = "", limit = 3) {
-  return [...new Set(leadThemeRules.filter((rule) => rule.pattern.test(text)).map((rule) => rule.label))].slice(0, limit);
-}
-
-function leadTitleHistory(limit = 60) {
-  return issues
-    .filter((issue) => issue.date !== date)
-    .map((issue) => publicTitle(issue.title))
-    .filter(Boolean)
-    .slice(0, limit);
-}
-
-function leadTemplateKey(value = "") {
-  const title = publicTitle(value);
-  const templates = [
-    { key: "today_issue", pattern: /오늘의\s*쟁점/ },
-    { key: "industry_change", pattern: /업계\s*변화/ },
-    { key: "market_signal", pattern: /시장\s*신호|업계\s*신호/ },
-    { key: "market_movement", pattern: /시장\s*움직임/ },
-    { key: "market_check", pattern: /시장\s*점검|오늘\s*브리핑/ },
-    { key: "together_read", pattern: /함께\s*읽는/ },
-  ];
-  return templates.find((template) => template.pattern.test(title))?.key || "";
-}
-
-function leadThemeKey(value = "") {
-  const themes = leadThemesFromText(publicTitle(value), 3);
-  return themes.length ? themes.sort().join("|") : "";
-}
-
-function isSimilarLeadTitle(title = "", previousTitle = "") {
-  const tokens = titleTokens(title);
-  const previousTokens = titleTokens(previousTitle);
-  if (!tokens.size || !previousTokens.size) return false;
-  const intersection = [...tokens].filter((token) => previousTokens.has(token)).length;
-  const smaller = Math.min(tokens.size, previousTokens.size);
-  const union = new Set([...tokens, ...previousTokens]).size;
-  return (intersection >= 2 && intersection / smaller >= 0.67) || (intersection >= 3 && intersection / union >= 0.38);
-}
-
-function conciseLeadSubject(value = "") {
-  const cleaned = publicTitle(value)
-    .replace(/\s+/g, " ")
-    .replace(/\s*\.\.\.\s*/g, "…")
-    .replace(/\s*[|｜].*$/g, "")
-    .trim();
-  const [firstPart] = cleaned.split(/[?!]/);
-  const subject = firstPart
-    .split(/…|,|;/)[0]
-    .replace(/^[\["'‘“]+|[\]"'’”]+$/g, "")
-    .trim();
-  if (subject.length >= 12 && subject.length <= 24) return subject;
-  if (subject.length > 24) return subject.slice(0, 24).replace(/\s+\S*$/, "");
-  return subject;
-}
-
-function leadHeadlineCandidates(articles = []) {
-  const text = articles
-    .map((article) => `${article.title || ""} ${article.summary || ""} ${(article.summaryBullets || []).join(" ")}`)
-    .join(" ");
-  const themes = leadThemesFromText(text, 4);
-  const subjects = articles
-    .map((article) => conciseLeadSubject(article.title))
-    .filter((subject) => subject && !isGenericLeadHeadline(subject));
-  const candidates = [];
-
-  if (subjects[0] && themes[0]) candidates.push(`${subjects[0]}로 본 ${themes[0]} 흐름`);
-  if (subjects[0] && themes[1]) candidates.push(`${subjects[0]}와 ${themes[1]} 대응 포인트`);
-  if (subjects[0] && subjects[1]) candidates.push(`${subjects[0]}와 ${subjects[1]}를 함께 점검`);
-  if (themes[0] && themes[1]) {
-    candidates.push(`${themes[0]}와 ${themes[1]} 대응 전략`);
-    candidates.push(`${themes[0]} 속 ${themes[1]} 변화`);
-    candidates.push(`${themes[0]} 경쟁과 ${themes[1]} 확장`);
-  }
-  if (themes[0]) {
-    candidates.push(`${themes[0]} 중심으로 본 상품·채널 대응`);
-    candidates.push(`${themes[0]} 이슈가 던진 운영 과제`);
-  }
-  candidates.push(...subjects.map((subject) => subject.slice(0, 42)));
-  candidates.push("상품 경쟁력과 유통 변화를 다시 점검한 브리핑");
-
-  return [...new Set(candidates.map((candidate) => publicTitle(candidate)).filter((candidate) => candidate.length >= 18))];
-}
 
 function fallbackLeadHeadline(articles = []) {
-  const candidates = leadHeadlineCandidates(articles);
-  const freshCandidate = candidates.find((candidate) => !isRepeatedArchiveTitle(candidate) && !isOverusedLeadHeadline(candidate));
-  if (freshCandidate) return freshCandidate;
-
-  const leadTitle = publicTitle(articles[0]?.title || "");
-  return leadTitle && !isGenericLeadHeadline(leadTitle)
-    ? leadTitle.slice(0, 42)
-    : "상품 경쟁력과 유통 변화를 다시 점검한 브리핑";
+  return compactArticleTitle(articles[0]?.title || "");
 }
 
 function fallbackLeadSummary(articles = []) {
-  const headlines = articles
-    .map((article) => publicTitle(article.title))
-    .filter((title) => title && !isGenericLeadHeadline(title))
-    .slice(0, 3);
-  if (!headlines.length) {
-    return "오늘 브리핑은 상품 경쟁력, 유통 변화, 공급망 이슈를 중심으로 살펴볼 만합니다.";
-  }
-  return `${headlines.join(", ")} 등이 오늘 눈에 띄는 흐름입니다. 상품 기획, 유통 접점, 공급망 관점에서 함께 볼 필요가 있습니다.`;
+  return articles.slice(0, 3).map((article) => article.summaryBullets?.[0] || article.summary || "").filter(Boolean).join(" ");
 }
 
-function normalizeWatchPoints(briefingData, articles = []) {
-  const rawPoints = Array.isArray(briefingData.watchPoints)
-    ? briefingData.watchPoints
-    : String(briefingData.watchPoint || "")
-        .split(/\n+|(?:^|\s)(?:[1-3][.)]|[-•])\s+/)
-        .map((point) => point.trim())
-        .filter(Boolean);
-  const cleaned = rawPoints
-    .map((point) => cleanSummaryText(point))
-    .filter((point) => point.length >= 20)
-    .slice(0, 3);
-  const fallbacks = fallbackWatchPoints(articles);
-  return [...cleaned, ...fallbacks].slice(0, 3);
-}
 
 function fallbackBriefing() {
   const picked = candidates
@@ -1592,44 +1420,92 @@ function fallbackBriefing() {
   };
 }
 
+async function requestBriefingModel(input, maxTokens = 3000) {
+  if (!TOKEN) throw new Error("Model credential unavailable");
+  const response = await fetchWithRetry("https://models.github.ai/inference/chat/completions", {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: "Bearer " + TOKEN,
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": API_VERSION,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: "system", content: "당신은 패션 비즈니스 에디터다. 제공한 기사 본문의 사실만 사용하고 분석은 분석임을 드러내라. 일반적인 상투어로 빈 내용을 채우지 마라." },
+        { role: "user", content: input },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+      max_tokens: maxTokens,
+    }),
+  }, 2);
+  if (!response.ok) throw new Error("GitHub Models request failed: " + response.status + " " + (await response.text()).slice(0, 300));
+  if (!response.headers.get("content-type")?.includes("json")) throw new Error("Model returned a non-JSON response");
+  const json = await response.json();
+  return JSON.parse(json.choices?.[0]?.message?.content || "{}");
+}
+
+function editorialMatchesArticles(editorial, articles) {
+  const lead = articles.find((article) => article.url === editorial.leadArticleUrl);
+  if (!lead || !editorial.leadHeadline || editorial.leadHeadline.length > 48) return false;
+  const facts = articles.map((article) => [article.title, article.publishedAt, ...(article.summaryBullets || [])].join(" ")).join(" ");
+  const generated = [editorial.leadHeadline, editorial.leadSummary, ...(editorial.watchPoints || [])].join(" ");
+  for (const word of ["음원", "음방", "솔로 신보", "뮤지션", "공연", "앨범"]) {
+    if (generated.includes(word) && !facts.includes(word)) return false;
+  }
+  const numbers = new Set((facts.match(/\d[\d,]*(?:\.\d+)?/g) || []).map((number) => number.replace(/,/g, "")));
+  if ((generated.match(/\d[\d,]*(?:\.\d+)?/g) || []).some((number) => !numbers.has(number.replace(/,/g, "")))) return false;
+  const leadTokens = titleTokens(lead.title);
+  const shared = [...titleTokens(editorial.leadHeadline)].filter((token) => leadTokens.has(token));
+  if (shared.length < 2 || /맞물린 하루|로 본.+흐름|대응 포인트|와.+를 함께 점검/.test(editorial.leadHeadline)) return false;
+  return typeof editorial.leadSummary === "string"
+    && Array.isArray(editorial.watchPoints) && editorial.watchPoints.length === 3
+    && new Set(editorial.watchPoints.map(summaryBulletKey)).size === 3
+    && editorial.watchPoints.every((point) => !looksTruncated(point) && !isGenericSummaryBullet(point));
+}
+
+async function finalEditorial(articles) {
+  const fallback = {
+    leadHeadline: fallbackLeadHeadline(articles),
+    leadSummary: fallbackLeadSummary(articles),
+    watchPoints: fallbackWatchPoints(articles),
+    tags: fallbackTags(articles),
+    articleImpacts: [],
+  };
+  const facts = articles.map((article) => ({
+    title: article.title, url: article.url, publishedAt: article.publishedAt,
+    summaryBullets: article.summaryBullets,
+  }));
+  const input = [
+    "아래는 최종 검증된 패션 기사 6개다. 이 목록 밖의 기사·기업·숫자를 언급하지 마라.",
+    "최종 기사만 보고 대표 제목, 소개문, 관전 포인트, 각 기사의 업계 영향을 새로 작성하라.",
+    "대표 제목은 선두 기사나 중요한 변화가 드러나는 48자 이하의 자연스러운 문구로 작성한다.",
+    "로 본 흐름, 맞물린 하루, 대응 포인트 같은 틀을 쓰지 말고 조사를 억지로 이어 붙이지 마라.",
+    "소개문은 핵심 사실과 수치를 담은 완결문 2개로 작성한다. 기사 제목을 나열하지 마라.",
+    "관전 포인트 3개는 각각 실제 기사 사실을 근거로 상품·유통·경쟁 측면의 점검 사항을 구체적으로 쓴다.",
+    "각 영향 문구도 실제 사건을 바탕으로 서로 다르게 쓰되, 예측은 단정하지 않는다. 내부 선별 기준을 공개 문구에 넣지 마라.",
+    'JSON 형식: {"leadArticleUrl":"제목의 근거 기사 URL","leadHeadline":"대표 제목","leadSummary":"소개문","watchPoints":["포인트1","포인트2","포인트3"],"tags":["태그1","태그2","태그3"],"articleImpacts":[{"url":"기사 URL","impact":"120자 이하의 분석 완결문"}]}',
+    JSON.stringify(facts),
+  ].join("\n");
+  try {
+    const editorial = await requestBriefingModel(input, 2000);
+    if (!editorialMatchesArticles(editorial, articles)) throw new Error("Editorial did not match final articles");
+    return { ...fallback, ...editorial };
+  } catch (error) {
+    console.warn("Final editorial uses verified article facts: " + error.message);
+    return fallback;
+  }
+}
+
 let briefing;
 try {
-const modelResponse = await fetchWithRetry("https://models.github.ai/inference/chat/completions", {
-  method: "POST",
-  headers: {
-    Accept: "application/vnd.github+json",
-    Authorization: `Bearer ${TOKEN}`,
-    "Content-Type": "application/json",
-    "X-GitHub-Api-Version": API_VERSION,
-  },
-  body: JSON.stringify({
-    model: MODEL,
-    messages: [
-      {
-        role: "system",
-        content:
-          "당신은 국내 패션 비즈니스 전문 에디터다. 제공된 뉴스 후보만 사용하며 사실과 분석을 엄격히 구분한다.",
-      },
-      { role: "user", content: prompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.2,
-    max_tokens: 3000,
-  }),
-}, 5);
-
-if (!modelResponse.ok) {
-  throw new Error(`GitHub Models request failed: ${modelResponse.status} ${await modelResponse.text()}`);
-}
-
-const modelJson = await modelResponse.json();
-const generated = JSON.parse(modelJson.choices?.[0]?.message?.content || "{}");
-if (!Array.isArray(generated.articles) || generated.articles.length < 3) {
-  throw new Error("Model response did not contain enough articles.");
-}
-briefing = generated;
+  const generated = await requestBriefingModel(prompt);
+  if (!Array.isArray(generated.articles)) throw new Error("Missing model articles");
+  briefing = generated;
 } catch (error) {
-  console.warn(`AI briefing generation failed; using fallback briefing. ${error.message}`);
+  console.warn("AI selection unavailable; using source-backed candidate pool. " + error.message);
   briefing = fallbackBriefing();
 }
 
@@ -1658,9 +1534,9 @@ function fallbackTags(articles = []) {
   const rules = [
     { tag: "스포츠웨어", pattern: /(스포츠웨어|아디다스|나이키|월드컵|미디어임팩트|miv)/i },
     { tag: "ESG", pattern: /(esg|지역사회|나눔|사회공헌|지속가능)/i },
-    { tag: "유럽진출", pattern: /(유럽|영국|부츠|해외|글로벌|수출|진출)/i },
+    { tag: "해외사업", pattern: /(유럽|영국|해외|글로벌|수출|진출|홀세일)/i },
     { tag: "뷰티유통", pattern: /(뷰티|화장품|스킨케어|약국|owm|아로마티카|이퀄베리)/i },
-    { tag: "헤리티지", pattern: /(헤리티지|장광효|장인정신|명품|트로아|다음세대)/i },
+    { tag: "헤리티지", pattern: /(헤리티지|장광효|장인정신|트로아|다음세대)/i },
     { tag: "기능성소재", pattern: /(소재|원단|섬유|기능성|r&d|연구개발|퍼포먼스|콜라겐)/i },
     { tag: "오프라인", pattern: /(오프라인|팝업|매장|상권|백화점|체험|공간)/i },
     { tag: "플랫폼", pattern: /(플랫폼|이커머스|온라인|무신사|쿠팡|아마존)/i },
@@ -1680,25 +1556,6 @@ function normalizeIssueTags(tags = [], articles = []) {
   return [...new Set([...articleTags, ...cleaned])].slice(0, 3);
 }
 
-function isRepeatedArchiveTitle(title = "") {
-  const normalized = publicTitle(title).replace(/\s+/g, "");
-  return leadTitleHistory(60).some((previous) => publicTitle(previous).replace(/\s+/g, "") === normalized);
-}
-
-function isOverusedLeadHeadline(title = "") {
-  const cleanTitle = publicTitle(title);
-  if (/맞물린\s*하루|흐름이\s*맞물린\s*하루/.test(cleanTitle)) return true;
-  if (/오늘의\s*쟁점|오늘\s*브리핑|오늘의\s*업계\s*신호/.test(cleanTitle)) return true;
-
-  const template = leadTemplateKey(cleanTitle);
-  const theme = leadThemeKey(cleanTitle);
-  const recentTitles = leadTitleHistory(30);
-  if (template && recentTitles.slice(0, 7).some((previous) => leadTemplateKey(previous) === template)) return true;
-  if (template && theme && recentTitles.some((previous) => leadTemplateKey(previous) === template && leadThemeKey(previous) === theme)) {
-    return true;
-  }
-  return recentTitles.slice(0, 12).some((previous) => isSimilarLeadTitle(cleanTitle, previous));
-}
 
 function toBriefingArticle(item) {
   const summaryBullets = normalizeSummaryBullets(item);
@@ -1739,12 +1596,13 @@ function candidateImageRank(item) {
 
 function bestCandidateForArticle(article) {
   return candidates
-    .filter((item) => sameArticle(item, article))
+    .filter((item) => canonicalArticleUrl(item.url) === canonicalArticleUrl(article.url))
     .sort((a, b) => candidateImageRank(b) - candidateImageRank(a))[0];
 }
 
 function normalizeModelArticle(article) {
   const candidate = bestCandidateForArticle(article);
+  if (!candidate) return null;
   const base = candidate || article;
   const cleanTitle = articleDisplayTitle(article.title, candidate?.title);
   const genericImpact =
@@ -1805,6 +1663,8 @@ function normalizeBriefingArticles(articles) {
   let selectedCelebrityFashionCount = 0;
   let selectedBeautyCount = 0;
   let selectedCollectionReviewCount = 0;
+  const selectedPublishers = new Map();
+  const rejected = new Map();
 
   function articlePriority(a, b) {
     const candidateA = candidates.find((item) => sameArticle(item, a)) || a;
@@ -1813,6 +1673,7 @@ function normalizeBriefingArticles(articles) {
   }
 
   function addArticle(article, options = {}) {
+    const reject = (reason) => rejected.set(article.url, { title: article.title, reason });
     const key = articleKey(article.title);
     const topic = topicKey(article.title);
     const cluster = clusterTitleKey(article.title);
@@ -1821,19 +1682,25 @@ function normalizeBriefingArticles(articles) {
     const isBeauty = isBeautyArticle(article);
     const isReview = isCollectionReview(article);
     const beautyLimit = options.allowSecondBeauty ? 2 : 1;
+    const original = candidates.find((item) => sameArticle(item, article)) || article;
+    const publisher = article.source || original.source || "";
+    if (!options.allowPublisherRepeat && businessPriority(original) === 0 && (selectedPublishers.get(publisher) || 0) >= 3) return;
     if (!article.title || !article.url || !key) return;
+    const articleProblems = briefingProblems([article], 1);
+    if (articleProblems.length) return reject(articleProblems.join("; "));
     if (isCelebrity && selectedCelebrityFashionCount >= 1) return;
     if (isBeauty && selectedBeautyCount >= beautyLimit) return;
     if (isReview && selectedCollectionReviewCount >= 1) return;
-    if (previousKeys.has(key) || (topic && previousTopicKeys.has(topic))) return;
-    if (cluster && previousClusterKeys.has(cluster)) return;
+    if (previousKeys.has(key)) return;
     if (isSimilarTokenSet(tokens, previousTokenSets)) return;
-    if (selectedUrls.has(article.url) || selectedKeys.has(key)) return;
+    const urlKey = canonicalArticleUrl(article.url);
+    if (selectedUrls.has(urlKey) || selectedKeys.has(key)) return;
     if (topic && selectedTopicKeys.has(topic)) return;
     if (cluster && selectedClusterKeys.has(cluster)) return;
     if (isSimilarTokenSet(tokens, selectedTokenSets)) return;
     selected.push(article);
-    selectedUrls.add(article.url);
+    selectedPublishers.set(publisher, (selectedPublishers.get(publisher) || 0) + 1);
+    selectedUrls.add(urlKey);
     selectedKeys.add(key);
     if (topic) selectedTopicKeys.add(topic);
     if (cluster) selectedClusterKeys.add(cluster);
@@ -1850,24 +1717,49 @@ function normalizeBriefingArticles(articles) {
     .filter(Boolean);
   const eligibleArticles = [...normalized, ...remainingArticles].sort(articlePriority);
   eligibleArticles
-    .filter((article) => !isBeautyArticle(article))
+    .filter((article) => !isBeautyArticle(article) && !isCelebrityFashionArticle(article))
+    .filter((article) => isPrimaryWindow(candidates.find((item) => sameArticle(item, article)) || article))
     .forEach((article) => {
       if (selected.length < ARTICLE_LIMIT) addArticle(article);
     });
 
   if (selected.length < ARTICLE_LIMIT) {
     eligibleArticles
+      .filter((article) => !isBeautyArticle(article) && !isCelebrityFashionArticle(article))
+      .filter((article) => isPrimaryWindow(candidates.find((item) => sameArticle(item, article)) || article))
+      .forEach((article) => {
+        if (selected.length < ARTICLE_LIMIT) addArticle(article, { allowPublisherRepeat: true });
+      });
+  }
+
+  if (selected.length < ARTICLE_LIMIT) {
+    eligibleArticles
+      .filter((article) => !isBeautyArticle(article) && !isCelebrityFashionArticle(article))
+      .forEach((article) => {
+        if (selected.length < ARTICLE_LIMIT) addArticle(article, { allowPublisherRepeat: true });
+      });
+  }
+
+  if (selected.length < ARTICLE_LIMIT) {
+    eligibleArticles
       .filter((item) => isBeautyArticle(item))
       .forEach((item) => {
         if (selected.length < ARTICLE_LIMIT) {
-          addArticle(item, { allowSecondBeauty: true });
+          addArticle(item, { allowSecondBeauty: true, allowPublisherRepeat: true });
         }
       });
   }
 
   if (selected.length < ARTICLE_LIMIT) {
+    eligibleArticles.filter(isCelebrityFashionArticle).forEach((article) => {
+      if (selected.length < ARTICLE_LIMIT) addArticle(article, { allowPublisherRepeat: true });
+    });
+  }
+
+  if (selected.length < ARTICLE_LIMIT) {
     console.warn("Only " + selected.length + " articles passed quality checks.");
   }
+  console.log("Selection audit: " + JSON.stringify({ eligible: eligibleArticles.length, selected: selected.map((article) => article.title), rejectedQuality: [...rejected.values()].slice(0, 12) }));
 
   return selected.slice(0, ARTICLE_LIMIT);
 }
@@ -1876,7 +1768,7 @@ async function chooseArticleImage(article, usedImages) {
   const accept = (image) => {
     if (!isUsableArticleImage(image)) return "";
     const key = imageKey(image);
-    if (!key || previousImages.has(key) || usedImages.has(key)) return "";
+    if (!key || usedImages.has(key)) return "";
     usedImages.add(key);
     return image;
   };
@@ -2023,21 +1915,9 @@ async function fetchWeeklySignals() {
 const weeklySignals = await fetchWeeklySignals();
 
 briefing.articles = normalizeBriefingArticles(briefing.articles || []);
-const fallbackHeadline = fallbackLeadHeadline(briefing.articles);
-briefing.leadHeadline = repairKoreanText(publicTitle(briefing.leadHeadline || fallbackHeadline));
-if (isGenericLeadHeadline(briefing.leadHeadline) || isRepeatedArchiveTitle(briefing.leadHeadline) || isOverusedLeadHeadline(briefing.leadHeadline)) {
-  briefing.leadHeadline = fallbackHeadline;
+if (briefing.articles.length !== ARTICLE_LIMIT) {
+  throw new Error("Not publishing an incomplete briefing: " + briefing.articles.length + " of " + ARTICLE_LIMIT + " verified articles. Existing archive preserved.");
 }
-if (isRepeatedArchiveTitle(briefing.leadHeadline) || isOverusedLeadHeadline(briefing.leadHeadline)) {
-  const leadTitle = publicTitle(briefing.articles[0]?.title || "");
-  briefing.leadHeadline = leadTitle && !isGenericLeadHeadline(leadTitle) ? leadTitle.slice(0, 42) : fallbackHeadline;
-}
-briefing.leadSummary = cleanSummaryText(briefing.leadSummary || fallbackLeadSummary(briefing.articles));
-if (isGenericLeadHeadline(briefing.leadSummary)) {
-  briefing.leadSummary = fallbackLeadSummary(briefing.articles);
-}
-briefing.tags = normalizeIssueTags(briefing.tags, briefing.articles);
-briefing.watchPoints = normalizeWatchPoints(briefing, briefing.articles);
 
 const usedImages = new Set();
 const enrichedDraft = [];
@@ -2055,7 +1935,6 @@ function relevanceSort(a, b) {
 }
 
 const orderedDraft = [...enrichedDraft].sort(relevanceSort);
-const usedImpacts = new Set();
 function moveBeautyAwayFromLead(articles = []) {
   const ordered = [...articles];
   if (!ordered.length || !isBeautyArticle(ordered[0])) return ordered;
@@ -2067,11 +1946,25 @@ function moveBeautyAwayFromLead(articles = []) {
 }
 
 const enrichedArticles = moveBeautyAwayFromLead(orderedDraft)
-  .slice(0, ARTICLE_LIMIT)
-  .map((article) => ({
-  ...article,
-  impact: uniqueImpactForArticle(article, usedImpacts),
-}));
+  .slice(0, ARTICLE_LIMIT);
+
+const renderedSummaryBullets = new Set();
+for (const article of enrichedArticles) {
+  article.summaryBullets = normalizeSummaryBullets(article, renderedSummaryBullets);
+}
+const problems = briefingProblems(enrichedArticles);
+if (problems.length) throw new Error("Publication quality check failed: " + problems.join("; "));
+const editorial = await finalEditorial(enrichedArticles);
+Object.assign(briefing, editorial);
+briefing.leadHeadline = publicTitle(editorial.leadHeadline);
+briefing.leadSummary = cleanSummaryText(editorial.leadSummary);
+briefing.tags = normalizeIssueTags(editorial.tags, enrichedArticles);
+briefing.watchPoints = editorial.watchPoints;
+const usedImpacts = new Set();
+for (const article of enrichedArticles) {
+  const impact = (editorial.articleImpacts || []).find((item) => item.url === article.url)?.impact;
+  article.impact = uniqueImpactForArticle({ ...article, impact: impact || fallbackImpact(article) }, usedImpacts);
+}
 
 const issueCoverImage =
   enrichedArticles.find((article) => !isBeautyArticle(article) && isUsableArticleImage(article.image))?.image ||
@@ -2082,10 +1975,9 @@ const issueHeadlines = enrichedArticles
   .filter(Boolean)
   .slice(0, ARTICLE_LIMIT);
 
-const renderedSummaryBullets = new Set();
 const articleCards = enrichedArticles
   .map((article) => {
-    const summaryBullets = normalizeSummaryBullets(article, renderedSummaryBullets);
+    const summaryBullets = article.summaryBullets;
     return `
       <article>
         <div class="meta">${escapeHtml(article.category)} · ${escapeHtml(article.publishedAt)}</div>

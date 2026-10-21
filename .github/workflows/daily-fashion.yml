@@ -49,7 +49,7 @@ jobs:
             target_date="$(TZ=Asia/Seoul date +%F)"
           fi
           echo "target_date=${target_date}" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "schedule" ] && grep -q "\"date\": \"${target_date}\"" data/issues.js; then
+          if [ "${{ github.event_name }}" = "schedule" ] && node scripts/check-briefing.mjs "$target_date"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Briefing for ${target_date} already exists. Skipping this backup schedule."
           else

@@ -1,0 +1,33 @@
+name: Briefing Regression Checks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".github/workflows/briefing-tests.yml"
+      - ".github/workflows/daily-fashion.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - ".github/workflows/briefing-tests.yml"
+      - ".github/workflows/daily-fashion.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Check briefing generation and publication rules
+        run: |
+          node --check scripts/update-daily.mjs
+          node scripts/test-article-titles.mjs
+          node scripts/test-article-quality.mjs
+          node scripts/test-business-priority.mjs
+          node scripts/test-briefing-pipeline.mjs

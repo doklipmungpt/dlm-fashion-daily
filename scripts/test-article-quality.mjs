@@ -2,9 +2,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { briefingProblems } from "./briefing-validation.mjs";
 
 const source = fs.readFileSync(new URL("./update-daily.mjs", import.meta.url), "utf8");
-const context = vm.createContext({ beautyKeywords: [] });
+const context = vm.createContext({ beautyKeywords: [], briefingProblems, URL });
 function block(start, end) {
   const begin = source.indexOf(start);
   return source.slice(begin, source.indexOf(end, begin));
@@ -16,7 +17,7 @@ vm.runInContext(
     + block("function metaContent(", "function pagePublishedAt(")
     + block("function articleKey(", "function clusterTitleKey(")
     + block("function toBriefingArticle(", "function safeBriefingArticle(")
-    + block("function businessPriority(", "const candidates =")
+    + block("function isFashionRelevant(", "const candidates =")
     + block("function isCollectionReview(", "async function chooseArticleImage("),
   context,
 );
@@ -60,11 +61,13 @@ assert.ok(!context.isCollectionReview({ title: "브랜드, 신규 상품 출시"
 
 const collection = (brand, priority) => ({
   title: brand + " 2027 S/S 컬렉션", url: "https://www.fashionn.com/board/read_new.php?table=1028&number=" + priority, priority,
+  summaryBullets: [brand + "는 재활용 소재를 사용한 새로운 컬렉션을 공개했습니다."],
 });
 const fixtures = [
   collection("디올", 100), collection("스텔라 맥카트니", 90),
-  ...["신발 매출 증가", "의류 수출 확대", "유통 플랫폼 실적", "섬유 소재 개발", "정책 지원사업"].map((title, i) => ({
+  ...["신발 매출 증가", "의류 수출 확대", "유통 플랫폼 실적", "섬유 소재 개발", "정책 지원사업 확대"].map((title, i) => ({
     title, url: "https://example.com/" + i, priority: 80 - i,
+    summaryBullets: [title + "를 통해 실제 사업 운영에서 변화가 확인됐습니다."],
   })),
 ];
 Object.assign(context, {
